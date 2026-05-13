@@ -1,0 +1,18 @@
+{
+    "objectscript.conn": {
+        "active": true,
+        "server": "localhost",
+        "ns": "USER"
+    },
+    "intersystems.servers": {
+        "localhost": {
+            "webServer": {
+                "scheme": "http",
+                "host": "localhost",
+                "port": 52773
+            },
+            "description": "localhost",
+            "username": "superuser"
+        }
+    }
+}

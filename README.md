@@ -23,6 +23,8 @@ Detailed project documentation lives in [DOCS/README.md](DOCS/README.md).
 
 The local IRIS environment is described in [DOCS/ARQUITECTURA_AJUSTADA_DOCKER_IRIS111.md](DOCS/ARQUITECTURA_AJUSTADA_DOCKER_IRIS111.md) and can be started from this repository with:
 
+This workspace defaults to the locally available image `intersystemsdc/irishealth-ml-community:latest` in [.env.docker](.env.docker) so the container can start without pulling a missing tag.
+
 ```bash
 ./scripts/setup_iris.sh
 docker compose --env-file .env.docker up -d

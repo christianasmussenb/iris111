@@ -1,12 +1,10 @@
 Class Service.BudgetImportService
 {
 
-Include %occStatus
-
 ClassMethod ImportCsv(csvText As %String) As %Status
 {
 	If csvText = "" {
-		Quit $$$ERROR($$$GeneralError, "Budget CSV is required")
+		Quit $SYSTEM.Status.Error(5001, "Budget CSV is required")
 	}
 
 	Set lineCount = 0
@@ -24,27 +22,27 @@ ClassMethod ImportCsv(csvText As %String) As %Status
 		If 'headerSeen {
 			Set headerSeen = 1
 			If ..ValidateHeader(line)=0 {
-				Quit $$$ERROR($$$GeneralError, "Budget CSV header is invalid")
+				Quit $SYSTEM.Status.Error(5001, "Budget CSV header is invalid")
 			}
 			Continue
 		}
 
 		Set status = ..ImportLine(line)
-		If $$$ISERR(status) {
+		If $SYSTEM.Status.IsError(status) {
 			Quit status
 		}
 
 		Set importedCount = importedCount + 1
 	}
 
-	Quit $$$OK
+	Quit 1
 }
 
 ClassMethod ImportLine(line As %String) As %Status
 {
 	Set parts = $Length(line, ",")
 	If parts < 5 {
-		Quit $$$ERROR($$$GeneralError, "Budget CSV line must contain at least 5 columns")
+		Quit $SYSTEM.Status.Error(5001, "Budget CSV line must contain at least 5 columns")
 	}
 
 	Set budgetDate = $ZStrip($Piece(line, ",", 1), "<>", " ")
@@ -52,20 +50,35 @@ ClassMethod ImportLine(line As %String) As %Status
 	Set categoryCode = $ZStrip($Piece(line, ",", 3), "<>", " ")
 	Set targetUnits = $ZStrip($Piece(line, ",", 4), "<>", " ")
 	Set targetRevenue = $ZStrip($Piece(line, ",", 5), "<>", " ")
+	Set budgetDate = $ZDATEH(budgetDate, 3)
 
 	If budgetDate = "" || storeCode = "" || categoryCode = "" {
-		Quit $$$ERROR($$$GeneralError, "Budget CSV line has required blank fields")
+		Quit $SYSTEM.Status.Error(5001, "Budget CSV line has required blank fields")
 	}
 
-	Set budget = ##class(MD.SalesBudget).%New()
-	Set budget.BudgetDate = budgetDate
-	Set budget.StoreCode = storeCode
-	Set budget.CategoryCode = categoryCode
-	Set budget.TargetUnits = +targetUnits
-	Set budget.TargetRevenue = +targetRevenue
-	Set budget.LoadedAt = $ZDATETIME($HOROLOG, 3, 1)
+	Set loadedAt = $ZDATETIME($HOROLOG, 3, 1)
+	Set stmt = ##class(%SQL.Statement).%New()
+	Set sql = "SELECT %ID FROM MD.SalesBudget WHERE BudgetDate = ? AND StoreCode = ? AND CategoryCode = ?"
+	Set sc = stmt.%Prepare(sql)
+	If $SYSTEM.Status.IsError(sc) Quit sc
+	Set rs = stmt.%Execute(budgetDate, storeCode, categoryCode)
 
-	Quit budget.%Save()
+	If rs.%Next() {
+		Set rowId = rs.%GetData(1)
+		Set stmt = ##class(%SQL.Statement).%New()
+		Set sql = "UPDATE MD.SalesBudget SET TargetUnits = ?, TargetRevenue = ?, LoadedAt = ? WHERE %ID = ?"
+		Set sc = stmt.%Prepare(sql)
+		If $SYSTEM.Status.IsError(sc) Quit sc
+		Do stmt.%Execute(+targetUnits, +targetRevenue, loadedAt, rowId)
+		Quit 1
+	}
+
+	Set stmt = ##class(%SQL.Statement).%New()
+	Set sql = "INSERT INTO MD.SalesBudget (BudgetDate, StoreCode, CategoryCode, TargetUnits, TargetRevenue, LoadedAt) VALUES (?, ?, ?, ?, ?, ?)"
+	Set sc = stmt.%Prepare(sql)
+	If $SYSTEM.Status.IsError(sc) Quit sc
+	Do stmt.%Execute(budgetDate, storeCode, categoryCode, +targetUnits, +targetRevenue, loadedAt)
+	Quit 1
 }
 
 ClassMethod ValidateHeader(headerLine As %String) As %Boolean

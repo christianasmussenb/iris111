@@ -1,6 +1,7 @@
 Class Gold.CategoryPace Extends %Persistent
 {
 
+Property PaceId As %String(MAXLEN = 80) [ Required ];
 Property PaceDate As %Date [ Required ];
 Property PaceHour As %Integer;
 Property StoreCode As %String(MAXLEN = 20) [ Required ];
@@ -17,6 +18,6 @@ Property VarianceUnits As %Numeric;
 Property VarianceRevenue As %Numeric;
 Property LastUpdated As %TimeStamp;
 
-Index PaceKeyIdx On PaceDate, PaceHour, StoreCode, CategoryCode [ Unique ];
+Index PaceKeyIdx On (PaceDate, PaceHour, StoreCode, CategoryCode) [ Unique ];
 
 }

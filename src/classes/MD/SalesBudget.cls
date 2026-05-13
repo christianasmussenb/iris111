@@ -8,6 +8,6 @@ Property TargetUnits As %Integer;
 Property TargetRevenue As %Numeric;
 Property LoadedAt As %TimeStamp;
 
-Index BudgetKeyIdx On BudgetDate, StoreCode, CategoryCode [ Unique ];
+Index BudgetKeyIdx On (BudgetDate, StoreCode, CategoryCode) [ Unique ];
 
 }

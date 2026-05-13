@@ -1,16 +1,14 @@
 Class Service.POSEventService
 {
 
-Include %occStatus
-
 ClassMethod Ingest(payload As %String, sourceChannel As %String = "REST") As %Status
 {
 	If payload = "" {
-		Quit $$$ERROR($$$GeneralError, "POS payload is required")
+		Quit $SYSTEM.Status.Error(5001, "POS payload is required")
 	}
 
 	If ..IsLikelyJson(payload)=0 {
-		Quit $$$ERROR($$$GeneralError, "POS payload must be JSON-like")
+		Quit $SYSTEM.Status.Error(5001, "POS payload must be JSON-like")
 	}
 
 	Set event = ##class(Bronze.POSEvent).%New()
