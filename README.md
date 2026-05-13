@@ -18,3 +18,20 @@ La documentación detallada del proyecto vive en [DOCS/README.md](DOCS/README.md
 IRIS111 is a proof of concept on InterSystems IRIS to monitor sales budget compliance in near real time and turn operational deviations into concrete actions for the store manager.
 
 Detailed project documentation lives in [DOCS/README.md](DOCS/README.md).
+
+## IRIS environment
+
+The local IRIS environment is described in [DOCS/ARQUITECTURA_AJUSTADA_DOCKER_IRIS111.md](DOCS/ARQUITECTURA_AJUSTADA_DOCKER_IRIS111.md) and can be started from this repository with:
+
+```bash
+./scripts/setup_iris.sh
+docker compose --env-file .env.docker up -d
+```
+
+Useful local commands:
+
+```bash
+./scripts/load_classes.sh
+./scripts/run_tests.sh all
+python3 ./scripts/mock_data_loader.py
+```

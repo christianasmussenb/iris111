@@ -1,0 +1,20 @@
+[
+  {
+    "source_id": "pos-evt-001",
+    "store_code": "GT-0145",
+    "timestamp": "2026-05-13T08:10:00Z",
+    "category_code": "BEBIDAS",
+    "internal_sku": "SKU-1001",
+    "qty": 2,
+    "price": 3500
+  },
+  {
+    "source_id": "pos-evt-002",
+    "store_code": "GT-0145",
+    "timestamp": "2026-05-13T08:15:00Z",
+    "category_code": "ACEITES",
+    "internal_sku": "SKU-2001",
+    "qty": 1,
+    "price": 8900
+  }
+]
