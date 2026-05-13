@@ -40,4 +40,4 @@ python3 ./scripts/mock_data_loader.py
 
 ## UI
 
-The operational console is available in `frontend/` for local use, and the same screen is also exposed from IRIS as `UI.StoreActionConsole.cls`. When loaded from IRIS CSP, it targets the REST controller at `/csp/user/API.UIController.cls`.
+The operational console is available in `frontend/` for local use, and the same screen is exposed from IRIS as the public web app `/csp/store-console/`. When loaded from IRIS CSP, it targets the REST controller at `/csp/store-console`.

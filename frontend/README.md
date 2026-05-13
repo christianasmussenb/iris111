@@ -13,7 +13,7 @@ This folder contains the mobile-first UI for IRIS111.
 1. Open `frontend/index.html` in a browser, or serve the folder with any static server.
 2. Set the API base URL in the connection panel.
 3. Load pace, pending recommendations, dashboard, and submit feedback from the same screen.
-4. In IRIS, the same UI is also exposed as the CSP page `UI.StoreActionConsole.cls`.
+4. In IRIS, the same UI is also exposed as the public web app `/store-console/`.
 
 ## Notes
 
@@ -21,3 +21,4 @@ This folder contains the mobile-first UI for IRIS111.
 - Feedback is sent as form-encoded payload so it matches the current IRIS controller contract.
 - The pending recommendations endpoint now uses the store code in the route path.
 - When the UI is loaded from IRIS CSP, it auto-switches its API base to `/csp/user/API.UIController.cls`.
+- When the UI is loaded from `/store-console/`, it auto-switches its API base to `/store-console`.

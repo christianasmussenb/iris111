@@ -2,7 +2,7 @@
 
 ## Resumen ejecutivo
 
-El proyecto ya pasó de documentación y scaffold a una base funcional sobre IRIS.
+El proyecto ya pasó de documentación y scaffold a una base funcional y operativa sobre IRIS.
 
 Hoy existe un flujo mínimo estable para:
 - importar presupuesto diario,
@@ -10,7 +10,9 @@ Hoy existe un flujo mínimo estable para:
 - persistir Bronze, Silver y Gold,
 - y validar el recorrido con un smoke test reproducible.
 
-La prioridad inmediata es pasar de ese flujo técnico estable a la lógica de negocio del siguiente sprint: reglas, evaluación de desvíos y generación de recomendaciones.
+Además, ya quedó expuesta una capa de consumo sobre IRIS con consola web pública, endpoints REST y flujo de feedback operativo validado desde navegador.
+
+La prioridad inmediata ya no es solo estabilizar la persistencia base. El foco pasa a endurecer la capa de consumo y trazabilidad: feedback consistente, consultas claras y una experiencia operativa que realmente cierre el loop entre detección, decisión y seguimiento.
 
 ## Objetivo del proyecto revisado
 
@@ -39,6 +41,9 @@ Lo que sí cambió es el nivel de madurez alcanzado. Hoy la PoC ya no está solo
   - POS procesado,
   - registro Gold creado,
   - y conteos confirmados en la base.
+- La consola operativa en `/csp/store-console/` quedó accesible desde IRIS.
+- El flujo de feedback sobre recomendaciones quedó validado desde la UI y por HTTP.
+- La cola de pendientes se limpia correctamente cuando una recomendación ya fue aceptada.
 
 ## Lecciones aprendidas
 
@@ -62,6 +67,12 @@ Cuando varias reglas pueden aplicar al mismo evento, la resolución no debe depe
 
 ### 7. La recomendación necesita contexto, no solo un código de acción
 Para que la recomendación sea útil en operación real, no basta con registrar la acción. También hace falta guardar severidad, umbral, valor observado, ventana evaluada y estado de ejecución para auditoría y seguimiento.
+
+### 8. La ruta de consumo también debe endurecerse
+Al exponer la UI desde CSP aparecieron diferencias entre llamadas directas, query params y rutas con segmentos. La experiencia fue útil para fijar una regla práctica: cuando el navegador y IRIS no leen el mismo contrato de request, conviene mover el dato importante a una ruta explícita y validar el flujo end-to-end en la consola real.
+
+### 9. La UI debe validarse contra el estado persistido, no contra el mensaje visual
+El primer mensaje exitoso de la consola no bastó: había que revisar la fila persistida y la cola de pendientes para confirmar que el ciclo de decisión realmente cambiaba el estado operativo.
 
 ## Siguiente sprint: prioridad 2
 
@@ -101,7 +112,19 @@ El sprint queda completo cuando un evento POS fuera de pace genera una recomenda
 - Ingesta POS: lista.
 - Persistencia Gold: lista.
 - Smoke tests: lista.
-- Reglas y recomendaciones: en ejecución inicial.
+- Reglas y recomendaciones: listas.
+- API/consumer layer: lista.
+- Consola web operativa: lista.
+- Feedback desde UI: validado.
+
+## Avance más reciente
+
+En esta iteración se cerró la capa de consumo operativa:
+
+- `API.UIController` quedó sirviendo health, pace, dashboard, pending recommendations y feedback.
+- La consola está expuesta públicamente en `/csp/store-console/`.
+- El submit de feedback ya actualiza el estado de la recomendación y limpia el backlog de pendientes.
+- La UI muestra el resultado del ciclo con un mensaje de confirmación y refresca la vista.
 
 ## Progreso del Sprint 2
 
@@ -134,38 +157,26 @@ Los dos puntos pedidos quedaron implementados y validados:
 - Smoke de prioridad múltiple: listo.
 - Recomendación enriquecida con contexto operativo: lista.
 
-## Avance del siguiente sprint
-
-La siguiente etapa ya comenzó con una base mínima de exposición operativa:
-
-- `API.UIController` ya existe como controlador REST.
-- Hay endpoints/herramientas para consultar health, pace, dashboard y recomendaciones pendientes.
-- El feedback sobre recomendaciones ya puede actualizar estado, aceptación y notas.
-- El smoke de API ya valida pace, recomendaciones, feedback y auditoría.
-- La carpeta `frontend/` ya dejó de ser un placeholder y contiene una UI estática con consumo real de la API.
-
-Lo que sigue en esta línea es endurecer la experiencia de consumo: separar mejor la lectura por endpoint, definir payloads más explícitos y conectar esta capa con una UI o consumidor real.
-
 ## Siguiente sprint propuesto
 
-El siguiente sprint debería salir de la capa de reglas y cerrar el loop operativo con exposición y seguimiento.
+El siguiente sprint debería consolidar la capa de consumo y dejarla lista para uso continuo por parte del usuario operativo.
 
 ### Objetivo del sprint
-Exponer el estado de cumplimiento y las recomendaciones operativas para que el administrador del local y la supervisión puedan consumir el resultado del motor de reglas.
+Hacer que la consola y la API se comporten como un producto operativo confiable: lectura clara, feedback consistente, trazabilidad completa y experiencia usable tanto desde navegador como desde integración externa.
 
 ### Alcance técnico recomendado
-1. Publicar endpoints REST para consultar el pace actual, las recomendaciones pendientes y el resumen por local.
-2. Agregar un flujo mínimo de feedback sobre recomendaciones: aceptar, rechazar o marcar como ejecutada.
-3. Persistir trazabilidad operacional adicional en `Ops.AuditLog` para cada consulta y cada cambio de estado.
-4. Añadir una vista o consulta consolidada que permita ver el estado diario de una categoría sin reconstruirlo desde cero.
-5. Crear smoke tests para API y feedback, usando los datos y recomendaciones ya validados.
+1. Endurecer la API de consumo para que los contratos de `health`, `pace`, `dashboard`, `pending` y `feedback` sean estables y fáciles de integrar.
+2. Consolidar el flujo de feedback con validaciones de entrada, mensajes de error más explícitos y comportamiento homogéneo en navegador y HTTP.
+3. Mejorar la consola web para que el operador vea mejor el estado real del ciclo: recomendación cargada, decisión tomada, estado persistido y backlog actualizado.
+4. Añadir más trazabilidad operativa en `Ops.AuditLog` para consultas y cambios de estado relevantes.
+5. Dejar smoke tests y pruebas de consola que cubran la ruta feliz completa y al menos un caso de error por endpoint crítico.
 
 ### Entregables esperados
-- API de consulta para pace y recomendaciones.
-- Operación de feedback sobre recomendaciones.
-- Auditoría de acciones y consultas.
-- Smoke de API mínimo y reproducible.
-- Documentación operativa de consumo.
+- API de consulta estable para pace, dashboard y recomendaciones.
+- Feedback operativo consistente desde consola y desde HTTP.
+- Auditoría de consumo y cambios de estado.
+- Smoke de API y UI que cubra el ciclo de decisión completo.
+- Documentación operativa actualizada para la consola pública.
 
 ### Criterio de salida del siguiente sprint
-El sprint queda completo cuando el sistema no solo detecta desvíos y genera recomendaciones, sino que también permite consultarlas, responderlas y auditar su ciclo de vida sin intervención manual en la base.
+El sprint queda completo cuando el sistema permite consultar el estado operativo, responder recomendaciones y ver el backlog actualizado desde la UI pública o por API, sin depender de intervención manual en la base.

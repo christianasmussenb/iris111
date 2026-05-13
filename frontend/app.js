@@ -6,11 +6,25 @@ const state = {
 };
 
 function getDefaultApiBaseUrl() {
-  if (window.location.pathname.includes('/csp/')) {
+  if (window.location.protocol === 'file:') {
+    return '/api';
+  }
+
+  if (window.location.pathname.startsWith('/csp/store-console')) {
+    return '/csp/store-console';
+  }
+
+  if (window.location.pathname.startsWith('/csp/')) {
     return '/csp/user/API.UIController.cls';
   }
 
-  return '/api';
+  if (window.location.pathname === '/') {
+    return '/api';
+  }
+
+  return normalizeBaseUrl(window.location.pathname.endsWith('/')
+    ? window.location.pathname.slice(0, -1)
+    : window.location.pathname);
 }
 
 const elements = {
@@ -53,12 +67,15 @@ function normalizeBaseUrl(value) {
 }
 
 async function requestJson(path, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  const hasBody = Object.prototype.hasOwnProperty.call(options, 'body') && options.body !== undefined && options.body !== null;
+  if (hasBody && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
+
   const response = await fetch(`${state.apiBaseUrl}${path}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options.headers || {}),
-    },
     ...options,
+    headers,
   });
 
   const text = await response.text();
@@ -262,16 +279,10 @@ async function submitFeedback(event) {
   }
 
   try {
-    const response = await requestJson(`/recommendations/${encodeURIComponent(recommendationId)}/feedback`, {
+    const params = new URLSearchParams({
+    });
+    const response = await requestJson(`/recommendations/${encodeURIComponent(recommendationId)}/feedback/${encodeURIComponent(elements.feedbackStatus.value)}/${encodeURIComponent(elements.acceptedBy.value.trim() || 'store.manager')}/${encodeURIComponent(elements.notes.value.trim() || '-')}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        status: elements.feedbackStatus.value,
-        acceptedBy: elements.acceptedBy.value.trim(),
-        notes: elements.notes.value.trim(),
-      }).toString(),
     });
 
     elements.feedbackResult.textContent = `Saved feedback for ${recommendationId} (${response?.after?.Status || elements.feedbackStatus.value}).`;
@@ -308,7 +319,7 @@ async function refreshAll() {
 }
 
 function boot() {
-  if (window.location.pathname.includes('/csp/') && elements.apiBaseUrl.value.trim() === '/api') {
+  if (elements.apiBaseUrl.value.trim() === '/api' && (window.location.pathname.startsWith('/csp/') || window.location.pathname !== '/')) {
     elements.apiBaseUrl.value = getDefaultApiBaseUrl();
   }
   clearFeedback();

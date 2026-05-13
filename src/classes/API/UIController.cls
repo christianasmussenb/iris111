@@ -6,10 +6,16 @@ Parameter CONTENTTYPE = "application/json";
 XData UrlMap
 {
 <Routes>
+	<Route Url="/" Method="GET" Call="GetUI" />
+	<Route Url="/index.html" Method="GET" Call="GetUI" />
+	<Route Url="/styles.css" Method="GET" Call="GetUIStyles" />
+	<Route Url="/app.js" Method="GET" Call="GetUIApp" />
     <Route Url="/health" Method="GET" Call="GetHealth" />
     <Route Url="/stores/:storeCode/categories/:categoryCode/pace" Method="GET" Call="GetPace" />
 	<Route Url="/recommendations/pending/:storeCode" Method="GET" Call="GetRecommendationsPending" />
     <Route Url="/recommendations/:recommendationId/feedback" Method="POST" Call="PostFeedback" />
+	<Route Url="/recommendations/:recommendationId/feedback/:decision/:acceptedBy/:notes" Method="POST" Call="PostFeedbackDetails" />
+	<Route Url="/recommendations/:recommendationId/feedback/:decision" Method="POST" Call="PostFeedbackDecision" />
     <Route Url="/dashboard/store/:storeCode" Method="GET" Call="GetDashboard" />
 	<Route Url="/ui" Method="GET" Call="GetUI" />
 	<Route Url="/ui/index.html" Method="GET" Call="GetUI" />
@@ -87,7 +93,7 @@ ClassMethod BuildPendingRecommendationsData(storeCode As %String) As %DynamicArr
 {
 	Set items = ##class(%DynamicArray).%New()
 	Set stmt = ##class(%SQL.Statement).%New()
-	Set sc = stmt.%Prepare("SELECT RecommendationId, StoreCode, CategoryCode, RuleFired, RuleWindowType, RuleThreshold, RuleObservedValue, RulePriority, RuleSeverity, BusinessMessage, ExecutionState, RelatedPaceId, ActionCode, ActionDescription, Status, TriggeredAt, AcceptedBy, AcceptedAt, ExecutedAt, EffectivenessScore, Notes FROM Ops.Recommendation WHERE StoreCode = ? AND Status = 'PENDING' ORDER BY TriggeredAt DESC")
+	Set sc = stmt.%Prepare("SELECT RecommendationId, StoreCode, CategoryCode, RuleFired, RuleWindowType, RuleThreshold, RuleObservedValue, RulePriority, RuleSeverity, BusinessMessage, ExecutionState, RelatedPaceId, ActionCode, ActionDescription, Status, TriggeredAt, AcceptedBy, AcceptedAt, ExecutedAt, EffectivenessScore, Notes FROM Ops.Recommendation WHERE StoreCode = ? AND Status = 'PENDING' AND ExecutionState = 'NEW' ORDER BY TriggeredAt DESC")
 	If $SYSTEM.Status.IsError(sc) Quit items
 	Set rs = stmt.%Execute(storeCode)
 	While rs.%Next() {
@@ -107,21 +113,21 @@ ClassMethod GetDashboard(storeCode As %String) As %Status
 ClassMethod GetUI() As %Status
 {
 	Set %response.ContentType = "text/html; charset=utf-8"
-	Do %response.Write(..BuildUIHtml())
+	Write ..BuildUIHtml()
 	Quit $$$OK
 }
 
 ClassMethod GetUIStyles() As %Status
 {
 	Set %response.ContentType = "text/css; charset=utf-8"
-	Do %response.Write(..ReadTextFile("/iris/frontend/styles.css"))
+	Write ..ReadTextFile("/iris/frontend/styles.css")
 	Quit $$$OK
 }
 
 ClassMethod GetUIApp() As %Status
 {
 	Set %response.ContentType = "application/javascript; charset=utf-8"
-	Do %response.Write(..ReadTextFile("/iris/frontend/app.js"))
+	Write ..ReadTextFile("/iris/frontend/app.js")
 	Quit $$$OK
 }
 
@@ -129,8 +135,8 @@ ClassMethod BuildUIHtml() As %String
 {
 	Set html = ..ReadTextFile("/iris/frontend/index.html")
 	If html = "" Quit "<!doctype html><html lang=""es""><head><meta charset=""utf-8""><title>IRIS111</title></head><body><p>UI unavailable.</p></body></html>"
-	If html [ "<base href=""/api/ui/"" />" Quit html
-	Set html = $Replace(html, "<head>", "<head><base href=""/api/ui/"" />", 1)
+	If html [ "<base href=""/csp/store-console/"" />" Quit html
+	Set html = $Replace(html, "<head>", "<head><base href=""/csp/store-console/"" />", 1)
 	Quit html
 }
 
@@ -164,11 +170,31 @@ ClassMethod BuildDashboardData(storeCode As %String) As %DynamicObject
 
 ClassMethod PostFeedback(recommendationId As %String) As %Status
 {
-	Set feedbackStatus = $Get(%request.Data("status"))
+	Set feedbackStatus = $Get(%request.Data("decision"))
+	If feedbackStatus = "" Set feedbackStatus = $Get(%request.Data("status"))
 	Set acceptedBy = $Get(%request.Data("acceptedBy"))
 	Set notes = $Get(%request.Data("notes"))
 	Set data = ..ApplyFeedback(recommendationId, feedbackStatus, acceptedBy, notes)
 	Do ..AuditRequest("Ops.Recommendation", recommendationId, "UPDATE_FEEDBACK", "", data.%ToJSON())
+	Do ..WriteJson(data)
+	Quit $$$OK
+}
+
+ClassMethod PostFeedbackDecision(recommendationId As %String, decision As %String) As %Status
+{
+	Set feedbackStatus = decision
+	Set acceptedBy = $Get(%request.Data("acceptedBy"))
+	Set notes = $Get(%request.Data("notes"))
+	Set data = ..ApplyFeedback(recommendationId, feedbackStatus, acceptedBy, notes)
+	Do ..AuditRequest("Ops.Recommendation", recommendationId _ "/" _ decision, "UPDATE_FEEDBACK", "", data.%ToJSON())
+	Do ..WriteJson(data)
+	Quit $$$OK
+}
+
+ClassMethod PostFeedbackDetails(recommendationId As %String, decision As %String, acceptedBy As %String, notes As %String) As %Status
+{
+	Set data = ..ApplyFeedback(recommendationId, decision, acceptedBy, notes)
+	Do ..AuditRequest("Ops.Recommendation", recommendationId _ "/" _ decision, "UPDATE_FEEDBACK", "", data.%ToJSON())
 	Do ..WriteJson(data)
 	Quit $$$OK
 }
@@ -198,27 +224,32 @@ ClassMethod ApplyFeedback(recommendationId As %String, feedbackStatus As %String
 
 	Set normalizedStatus = $ZCONVERT($Get(feedbackStatus), "U")
 	If normalizedStatus = "" Set normalizedStatus = "PENDING"
-	Set recommendation.Status = normalizedStatus
-	Set recommendation.Notes = $Select(notes'="":notes, 1:recommendation.Notes)
-	Set recommendation.ExecutionState = $Select(normalizedStatus = "ACCEPTED":"ACCEPTED", normalizedStatus = "REJECTED":"REJECTED", normalizedStatus = "MODIFIED":"MODIFIED", 1:recommendation.ExecutionState)
-	If normalizedStatus = "ACCEPTED" {
-		Set recommendation.AcceptedBy = acceptedBy
-		Set recommendation.AcceptedAt = $ZDATETIME($HOROLOG, 3, 1)
-	}
-	If normalizedStatus = "MODIFIED" {
-		Set recommendation.AcceptedBy = acceptedBy
-		Set recommendation.AcceptedAt = $ZDATETIME($HOROLOG, 3, 1)
-	}
-	If normalizedStatus = "EXECUTED" {
-		Set recommendation.ExecutedAt = $ZDATETIME($HOROLOG, 3, 1)
-	}
-	Set sc = recommendation.%Save()
+	Set defaultAcceptedBy = $Select(acceptedBy'="":acceptedBy, 1:"store.manager")
+	Set updatedAcceptedBy = $Select((normalizedStatus = "ACCEPTED")!(normalizedStatus = "MODIFIED"):defaultAcceptedBy, 1:recommendation.AcceptedBy)
+	Set updatedAcceptedAt = $Select((normalizedStatus = "ACCEPTED")!(normalizedStatus = "MODIFIED"):$ZDATETIME($HOROLOG, 3, 1), 1:recommendation.AcceptedAt)
+	Set updatedExecutedAt = $Select(normalizedStatus = "EXECUTED":$ZDATETIME($HOROLOG, 3, 1), 1:recommendation.ExecutedAt)
+	Set updatedNotes = $Select(notes'="":notes, 1:recommendation.Notes)
+	Set updatedExecutionState = $Select(normalizedStatus = "ACCEPTED":"ACCEPTED", normalizedStatus = "REJECTED":"REJECTED", normalizedStatus = "MODIFIED":"MODIFIED", normalizedStatus = "EXECUTED":"EXECUTED", 1:recommendation.ExecutionState)
+
+	Set stmt = ##class(%SQL.Statement).%New()
+	Set sc = stmt.%Prepare("UPDATE Ops.Recommendation SET ""Status"" = ?, ExecutionState = ?, AcceptedBy = ?, AcceptedAt = ?, ExecutedAt = ?, Notes = ? WHERE RecommendationId = ?")
 	If $SYSTEM.Status.IsError(sc) {
-		Set result.error = "RECOMMENDATION_SAVE_FAILED"
+		Set result.error = "RECOMMENDATION_UPDATE_FAILED"
+		Quit result
+	}
+	Set sc = stmt.%Execute(normalizedStatus, updatedExecutionState, updatedAcceptedBy, updatedAcceptedAt, updatedExecutedAt, updatedNotes, recommendationId)
+	If $SYSTEM.Status.IsError(sc) {
+		Set result.error = "RECOMMENDATION_UPDATE_FAILED"
+		Quit result
+	}
+	Set recommendation = ##class(Ops.Recommendation).%OpenId(rs.%GetData(1))
+	If '$IsObject(recommendation) {
+		Set result.error = "RECOMMENDATION_OPEN_FAILED"
 		Quit result
 	}
 
 	Set afterState = ..RecommendationToObject(recommendation)
+	Set afterState.Status = normalizedStatus
 	Set result.before = beforeState
 	Set result.after = afterState
 	Set result.saved = 1
@@ -318,7 +349,7 @@ ClassMethod AuditRequest(entityName As %String, entityId As %String, actionType 
 ClassMethod WriteJson(payload) As %Status
 {
 	Set %response.ContentType = "application/json"
-	Do %response.Write(payload.%ToJSON())
+	Write payload.%ToJSON()
 	Quit $$$OK
 }
 
