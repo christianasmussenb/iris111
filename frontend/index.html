@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>IRIS111 | Store Action Console</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="hero">
+        <div class="brand-row">
+          <div class="brand-mark">I111</div>
+          <div>
+            <p class="eyebrow">IRIS111 PoC</p>
+            <h1>Store Action Console</h1>
+          </div>
+        </div>
+
+        <p class="lead">
+          Vista operativa para monitorear pace, revisar recomendaciones y cerrar el loop de acción desde un solo lugar.
+        </p>
+
+        <div class="hero-stats">
+          <article>
+            <span>Health</span>
+            <strong id="healthStatus">--</strong>
+          </article>
+          <article>
+            <span>Store</span>
+            <strong id="storeLabel">GT-0145</strong>
+          </article>
+          <article>
+            <span>Category</span>
+            <strong id="categoryLabel">BEBIDAS</strong>
+          </article>
+        </div>
+
+        <div class="panel panel--compact">
+          <div class="panel__header">
+            <h2>Connection</h2>
+            <button id="refreshAllBtn" class="button button--ghost" type="button">Refresh all</button>
+          </div>
+          <label class="field">
+            <span>API base URL</span>
+            <input id="apiBaseUrl" type="text" value="/api" placeholder="/api" />
+          </label>
+          <label class="field">
+            <span>Store code</span>
+            <input id="storeCode" type="text" value="GT-0145" />
+          </label>
+          <label class="field">
+            <span>Category code</span>
+            <input id="categoryCode" type="text" value="BEBIDAS" />
+          </label>
+        </div>
+      </aside>
+
+      <main class="content">
+        <section class="panel panel--headline">
+          <div>
+            <p class="eyebrow">Operating loop</p>
+            <h2>Pace, recommendations and feedback</h2>
+          </div>
+          <div class="inline-metrics">
+            <div>
+              <span>Latest pace</span>
+              <strong id="paceValue">--</strong>
+            </div>
+            <div>
+              <span>Pending recs</span>
+              <strong id="pendingCount">--</strong>
+            </div>
+            <div>
+              <span>Dashboard rows</span>
+              <strong id="dashboardCount">--</strong>
+            </div>
+          </div>
+        </section>
+
+        <section class="grid">
+          <article class="panel">
+            <div class="panel__header">
+              <h2>Current pace</h2>
+              <button id="loadPaceBtn" class="button" type="button">Load pace</button>
+            </div>
+            <div id="paceCard" class="state-card state-card--empty">
+              <p>Press <strong>Load pace</strong> to fetch the current category pace.</p>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel__header">
+              <h2>Pending recommendations</h2>
+              <button id="loadPendingBtn" class="button" type="button">Load pending</button>
+            </div>
+            <div id="recommendationsList" class="recommendation-list state-card state-card--empty">
+              <p>Recommendations will appear here.</p>
+            </div>
+          </article>
+        </section>
+
+        <section class="panel">
+          <div class="panel__header">
+            <h2>Store dashboard</h2>
+            <button id="loadDashboardBtn" class="button" type="button">Load dashboard</button>
+          </div>
+          <div id="dashboardList" class="dashboard state-card state-card--empty">
+            <p>Dashboard rows will appear here.</p>
+          </div>
+        </section>
+
+        <section class="panel panel--feedback">
+          <div class="panel__header">
+            <h2>Recommendation feedback</h2>
+            <span class="pill">Accept / Reject / Modify / Execute</span>
+          </div>
+          <form id="feedbackForm" class="feedback-form">
+            <label class="field">
+              <span>Recommendation ID</span>
+              <input id="recommendationId" type="text" placeholder="Select a pending recommendation" />
+            </label>
+            <label class="field">
+              <span>Status</span>
+              <select id="feedbackStatus">
+                <option value="ACCEPTED">ACCEPTED</option>
+                <option value="REJECTED">REJECTED</option>
+                <option value="MODIFIED">MODIFIED</option>
+                <option value="EXECUTED">EXECUTED</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Accepted by</span>
+              <input id="acceptedBy" type="text" placeholder="store.manager" />
+            </label>
+            <label class="field field--wide">
+              <span>Notes</span>
+              <textarea id="notes" rows="4" placeholder="Add operational notes or modifications"></textarea>
+            </label>
+            <div class="feedback-actions">
+              <button class="button button--primary" type="submit">Save feedback</button>
+              <button id="clearFeedbackBtn" class="button button--ghost" type="button">Clear</button>
+            </div>
+          </form>
+          <div id="feedbackResult" class="result-box">No feedback submitted yet.</div>
+        </section>
+      </main>
+    </div>
+
+    <template id="recommendationTemplate">
+      <article class="recommendation-item">
+        <div class="recommendation-item__top">
+          <div>
+            <strong class="rec-title"></strong>
+            <p class="rec-subtitle"></p>
+          </div>
+          <span class="pill rec-status"></span>
+        </div>
+        <dl class="rec-grid">
+          <div><dt>Rule</dt><dd class="rec-rule"></dd></div>
+          <div><dt>Priority</dt><dd class="rec-priority"></dd></div>
+          <div><dt>Severity</dt><dd class="rec-severity"></dd></div>
+          <div><dt>Window</dt><dd class="rec-window"></dd></div>
+        </dl>
+        <p class="rec-message"></p>
+        <div class="rec-actions">
+          <button class="button button--ghost select-rec-btn" type="button">Use this recommendation</button>
+        </div>
+      </article>
+    </template>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

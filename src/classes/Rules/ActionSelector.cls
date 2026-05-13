@@ -12,4 +12,15 @@ ClassMethod SelectAction(ruleCode As %String) As %String
     Quit "REVIEW_MANUALLY"
 }
 
+ClassMethod GetPriority(ruleCode As %String) As %Integer
+{
+    Set ruleCode = $ZCONVERT(ruleCode, "U")
+
+    If ruleCode = "PACE_NEGATIVE_CRITICAL" Quit 1
+    If ruleCode = "PACE_NEGATIVE_SUSTAINED" Quit 2
+    If ruleCode = "STOCKOUT_INFERRED" Quit 3
+
+    Quit 99
+}
+
 }

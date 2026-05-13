@@ -57,6 +57,8 @@ ClassMethod ImportLine(line As %String) As %Status
 	}
 
 	Set loadedAt = $ZDATETIME($HOROLOG, 3, 1)
+	Set ^IRIS111("budget", budgetDate, storeCode, categoryCode, "units") = +targetUnits
+	Set ^IRIS111("budget", budgetDate, storeCode, categoryCode, "revenue") = +targetRevenue
 	Set stmt = ##class(%SQL.Statement).%New()
 	Set sql = "SELECT %ID FROM MD.SalesBudget WHERE BudgetDate = ? AND StoreCode = ? AND CategoryCode = ?"
 	Set sc = stmt.%Prepare(sql)

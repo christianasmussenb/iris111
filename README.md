@@ -37,3 +37,7 @@ Useful local commands:
 ./scripts/run_tests.sh all
 python3 ./scripts/mock_data_loader.py
 ```
+
+## UI
+
+The operational console is available in `frontend/` for local use, and the same screen is also exposed from IRIS as `UI.StoreActionConsole.cls`. When loaded from IRIS CSP, it targets the REST controller at `/csp/user/API.UIController.cls`.

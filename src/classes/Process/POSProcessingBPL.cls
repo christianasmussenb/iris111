@@ -69,8 +69,8 @@ ClassMethod UpdateGold(storeCode As %String, categoryCode As %String, saleDate A
 	Set revenueCumulative = lineTotal
 	Set pctPaceUnits = ..CalculatePct(unitsCumulative, unitsBudget)
 	Set pctPaceRevenue = ..CalculatePct(revenueCumulative, revenueBudget)
-	Set varianceUnits = unitsBudget - unitsCumulative
-	Set varianceRevenue = revenueBudget - revenueCumulative
+	Set varianceUnits = unitsCumulative - unitsBudget
+	Set varianceRevenue = revenueCumulative - revenueBudget
 	Set lastUpdated = $ZDATETIME($HOROLOG, 3, 1)
 
 	Set pace = ##class(Gold.CategoryPace).%New()
@@ -88,7 +88,7 @@ ClassMethod UpdateGold(storeCode As %String, categoryCode As %String, saleDate A
 	Set pace.PctPaceUnits = pctPaceUnits
 	Set pace.PctPaceRevenue = pctPaceRevenue
 	Set pace.VarianceUnits = varianceUnits
-	Set pace.VarianceRevenue = revenueBudget - revenueCumulative
+	Set pace.VarianceRevenue = varianceRevenue
 	Set pace.LastUpdated = lastUpdated
 	Quit pace.%Save()
 }
@@ -97,22 +97,55 @@ ClassMethod EvaluateRules(storeCode As %String, categoryCode As %String, saleDat
 {
 	Set recommendationId = ""
 	Set ruleCode = ""
+	Set rulePriority = 99
+	Set ruleWindowType = "PACE"
+	Set ruleThreshold = -25
+	Set ruleObservedValue = varianceUnits
+	Set ruleSeverity = "LOW"
+	Set businessMessage = "No action required"
+	Set executionState = "NEW"
 	If ##class(Rules.PaceRules).IsCritical(varianceUnits) {
 		Set ruleCode = "PACE_NEGATIVE_CRITICAL"
-	} ElseIf ##class(Rules.PaceRules).IsSustained(..CountBelowThreshold(storeCode, categoryCode, saleDate), 3) {
+		Set ruleSeverity = "HIGH"
+		Set businessMessage = "Critical pace deviation detected"
+	} ElseIf ##class(Rules.PaceRules).IsSustained(..CountBelowThreshold(storeCode, categoryCode, saleDate, -10), 3) {
 		Set ruleCode = "PACE_NEGATIVE_SUSTAINED"
+		Set ruleWindowType = "HOURLY_STREAK"
+		Set ruleThreshold = 3
+		Set ruleObservedValue = ..CountBelowThreshold(storeCode, categoryCode, saleDate, -10)
+		Set ruleSeverity = "MEDIUM"
+		Set businessMessage = "Pace has been below threshold for consecutive windows"
 	} ElseIf ##class(Rules.PaceRules).IsStockoutInferred(..CountWithoutSales(storeCode, categoryCode, saleDate), 2) {
 		Set ruleCode = "STOCKOUT_INFERRED"
+		Set ruleWindowType = "NO_SALES"
+		Set ruleThreshold = 2
+		Set ruleObservedValue = ..CountWithoutSales(storeCode, categoryCode, saleDate)
+		Set ruleSeverity = "HIGH"
+		Set businessMessage = "No sales detected for consecutive windows"
 	}
 
 	If ruleCode = "" Quit 1
+	Set rulePriority = ##class(Rules.ActionSelector).GetPriority(ruleCode)
 
+	Quit ..CreateRecommendation(ruleCode, storeCode, categoryCode, paceId, ruleWindowType, ruleThreshold, ruleObservedValue, rulePriority, ruleSeverity, businessMessage, executionState, .recommendationId)
+}
+
+ClassMethod CreateRecommendation(ruleCode As %String, storeCode As %String, categoryCode As %String, paceId As %String, ruleWindowType As %String, ruleThreshold As %Numeric, ruleObservedValue As %Numeric, rulePriority As %Integer, ruleSeverity As %String, businessMessage As %String, executionState As %String, Output recommendationId As %String) As %Status
+{
 	Set recommendation = ##class(Ops.Recommendation).%New()
 	Set recommendationId = $SYSTEM.Util.CreateGUID()
 	Set recommendation.RecommendationId = recommendationId
 	Set recommendation.StoreCode = storeCode
 	Set recommendation.CategoryCode = categoryCode
 	Set recommendation.RuleFired = ruleCode
+	Set recommendation.RuleWindowType = ruleWindowType
+	Set recommendation.RuleThreshold = ruleThreshold
+	Set recommendation.RuleObservedValue = ruleObservedValue
+	Set recommendation.RulePriority = rulePriority
+	Set recommendation.RuleSeverity = ruleSeverity
+	Set recommendation.BusinessMessage = businessMessage
+	Set recommendation.ExecutionState = executionState
+	Set recommendation.RelatedPaceId = paceId
 	Set recommendation.ActionCode = ##class(Rules.ActionSelector).SelectAction(ruleCode)
 	Set recommendation.ActionDescription = ..ActionDescription(recommendation.ActionCode)
 	Set recommendation.Status = "PENDING"
@@ -142,14 +175,30 @@ ClassMethod GetBudgetRevenue(saleDate As %Date, storeCode As %String, categoryCo
 	Quit +$Get(^IRIS111("budget", saleDate, storeCode, categoryCode, "revenue"), 0)
 }
 
-ClassMethod CountBelowThreshold(storeCode As %String, categoryCode As %String, saleDate As %Date) As %Integer
+ClassMethod CountBelowThreshold(storeCode As %String, categoryCode As %String, saleDate As %Date, threshold As %Numeric = -25) As %Integer
 {
-	Quit 0
+	New count
+	Set count = 0
+	&sql(SELECT COUNT(*) INTO :count
+		FROM Gold.CategoryPace
+		WHERE StoreCode = :storeCode
+		  AND CategoryCode = :categoryCode
+		  AND PaceDate = :saleDate
+		  AND VarianceUnits <= :threshold)
+	Quit +$Get(count, 0)
 }
 
 ClassMethod CountWithoutSales(storeCode As %String, categoryCode As %String, saleDate As %Date) As %Integer
 {
-	Quit 0
+	New count
+	Set count = 0
+	&sql(SELECT COUNT(*) INTO :count
+		FROM Gold.CategoryPace
+		WHERE StoreCode = :storeCode
+		  AND CategoryCode = :categoryCode
+		  AND PaceDate = :saleDate
+		  AND UnitsSold = 0)
+	Quit +$Get(count, 0)
 }
 
 ClassMethod ActionDescription(actionCode As %String) As %String
@@ -157,6 +206,15 @@ ClassMethod ActionDescription(actionCode As %String) As %String
 	If actionCode = "MOVE_PALLET_TO_ENTRY" Quit "Move high-visibility stock to entry"
 	If actionCode = "ACTIVATE_PROMOTION" Quit "Activate a promotional price or banner"
 	If actionCode = "REFRESH_SHELF_DISPLAY" Quit "Refresh shelf display and facing"
+	Quit "Manual review required"
+}
+
+ClassMethod RuleDescription(ruleCode As %String) As %String
+{
+	Set ruleCode = $ZCONVERT(ruleCode, "U")
+	If ruleCode = "PACE_NEGATIVE_CRITICAL" Quit "Critical pace deviation"
+	If ruleCode = "PACE_NEGATIVE_SUSTAINED" Quit "Sustained pace deviation"
+	If ruleCode = "STOCKOUT_INFERRED" Quit "Stockout inferred from zero sales"
 	Quit "Manual review required"
 }
 
