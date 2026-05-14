@@ -7,6 +7,7 @@ This folder contains the mobile-first UI for IRIS111.
 - `index.html`: single-screen console for pace, pending recommendations, dashboard, and feedback.
 - `app.js`: browser-side consumer of the IRIS REST API.
 - `styles.css`: responsive shell and operational cards.
+- The same screen also includes a tiny POS mock injector that POSTs to `/pos/ingest`.
 
 ## How to use
 
@@ -20,5 +21,6 @@ This folder contains the mobile-first UI for IRIS111.
 - The UI expects the IRIS REST API exposed under `/api` by default.
 - Feedback is sent as form-encoded payload so it matches the current IRIS controller contract.
 - The pending recommendations endpoint now uses the store code in the route path.
+- POS mock injections use JSON over REST and go to `/pos/ingest`.
 - When the UI is loaded from IRIS CSP, it auto-switches its API base to `/csp/user/API.UIController.cls`.
-- When the UI is loaded from `/store-console/`, it auto-switches its API base to `/store-console`.
+- When the UI is loaded from `/csp/store-console/`, it auto-switches its API base to `/csp/store-console`.

@@ -11,6 +11,7 @@ XData UrlMap
 	<Route Url="/styles.css" Method="GET" Call="GetUIStyles" />
 	<Route Url="/app.js" Method="GET" Call="GetUIApp" />
     <Route Url="/health" Method="GET" Call="GetHealth" />
+	<Route Url="/pos/ingest" Method="POST" Call="PostPOSIngest" />
     <Route Url="/stores/:storeCode/categories/:categoryCode/pace" Method="GET" Call="GetPace" />
 	<Route Url="/recommendations/pending/:storeCode" Method="GET" Call="GetRecommendationsPending" />
     <Route Url="/recommendations/:recommendationId/feedback" Method="POST" Call="PostFeedback" />
@@ -28,6 +29,51 @@ ClassMethod GetHealth() As %Status
 {
 	Set data = ..BuildHealthData()
 	Do ..WriteJson(data)
+	Quit $$$OK
+}
+
+ClassMethod PostPOSIngest() As %Status
+{
+	Set body = ..ReadRequestBody()
+	Set result = ##class(%DynamicObject).%New()
+
+	If body = "" {
+		Set %response.Status = 400
+		Set result.status = "error"
+		Set result.error = "POS payload is required"
+		Do ..WriteJson(result)
+		Quit $$$OK
+	}
+
+	Set payload = ##class(%DynamicObject).%FromJSON(body)
+	If '$IsObject(payload) {
+		Set %response.Status = 400
+		Set result.status = "error"
+		Set result.error = "Invalid POS payload JSON"
+		Do ..WriteJson(result)
+		Quit $$$OK
+	}
+
+	Set status = ##class(Process.POSProcessingBPL).HandlePayload(body, "REST")
+	If $SYSTEM.Status.IsError(status) {
+		Set %response.Status = 400
+		Set result.status = "error"
+		Set result.error = $SYSTEM.Status.GetErrorText(status)
+		Set result.sourceId = payload.%Get("source_id")
+		Do ..WriteJson(result)
+		Quit $$$OK
+	}
+
+	Set result.status = "ok"
+	Set result.message = "POS mock ingested and processed"
+	Set result.sourceId = payload.%Get("source_id")
+	Set result.storeCode = payload.%Get("store_code")
+	Set result.categoryCode = payload.%Get("category_code")
+	Set result.timestamp = payload.%Get("timestamp")
+	Set result.internalSku = payload.%Get("internal_sku")
+	Set result.qty = +payload.%Get("qty")
+	Set result.price = +payload.%Get("price")
+	Do ..WriteJson(result)
 	Quit $$$OK
 }
 
@@ -148,6 +194,15 @@ ClassMethod ReadTextFile(filePath As %String) As %String
 	Set content = ""
 	While 'stream.AtEnd {
 		Set content = content _ stream.Read(32767)
+	}
+	Quit content
+}
+
+ClassMethod ReadRequestBody() As %String
+{
+	Set content = ""
+	While '(%request.Content.AtEnd) {
+		Set content = content _ %request.Content.Read(32767)
 	}
 	Quit content
 }

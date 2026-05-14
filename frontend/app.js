@@ -5,6 +5,16 @@ const state = {
   pendingRecommendations: [],
 };
 
+const posDefaults = {
+  sourceId: 'pos-evt-001',
+  storeCode: 'GT-0145',
+  timestamp: '2026-05-13T08:10:00Z',
+  categoryCode: 'BEBIDAS',
+  internalSku: 'SKU-1001',
+  qty: '2',
+  price: '3500',
+};
+
 function getDefaultApiBaseUrl() {
   if (window.location.protocol === 'file:') {
     return '/api';
@@ -40,6 +50,16 @@ const elements = {
   paceCard: document.getElementById('paceCard'),
   recommendationsList: document.getElementById('recommendationsList'),
   dashboardList: document.getElementById('dashboardList'),
+  posForm: document.getElementById('posForm'),
+  posSourceId: document.getElementById('posSourceId'),
+  posStoreCode: document.getElementById('posStoreCode'),
+  posTimestamp: document.getElementById('posTimestamp'),
+  posCategoryCode: document.getElementById('posCategoryCode'),
+  posInternalSku: document.getElementById('posInternalSku'),
+  posQty: document.getElementById('posQty'),
+  posPrice: document.getElementById('posPrice'),
+  posResult: document.getElementById('posResult'),
+  loadPosSampleBtn: document.getElementById('loadPosSampleBtn'),
   feedbackForm: document.getElementById('feedbackForm'),
   feedbackResult: document.getElementById('feedbackResult'),
   recommendationId: document.getElementById('recommendationId'),
@@ -52,6 +72,12 @@ const elements = {
   loadDashboardBtn: document.getElementById('loadDashboardBtn'),
   clearFeedbackBtn: document.getElementById('clearFeedbackBtn'),
   recommendationTemplate: document.getElementById('recommendationTemplate'),
+  tabOpsBtn: document.getElementById('tabOpsBtn'),
+  tabPosBtn: document.getElementById('tabPosBtn'),
+  tabBudgetBtn: document.getElementById('tabBudgetBtn'),
+  tabOps: document.getElementById('tabOps'),
+  tabPos: document.getElementById('tabPos'),
+  tabBudget: document.getElementById('tabBudget'),
 };
 
 function readConfig() {
@@ -103,6 +129,53 @@ function formatValue(value, fallback = '--') {
     return fallback;
   }
   return value;
+}
+
+function resetPosSample() {
+  elements.posSourceId.value = posDefaults.sourceId;
+  elements.posStoreCode.value = posDefaults.storeCode;
+  elements.posTimestamp.value = posDefaults.timestamp;
+  elements.posCategoryCode.value = posDefaults.categoryCode;
+  elements.posInternalSku.value = posDefaults.internalSku;
+  elements.posQty.value = posDefaults.qty;
+  elements.posPrice.value = posDefaults.price;
+}
+
+function buildPosPayload() {
+  return {
+    source_id: elements.posSourceId.value.trim(),
+    store_code: elements.posStoreCode.value.trim(),
+    timestamp: elements.posTimestamp.value.trim(),
+    category_code: elements.posCategoryCode.value.trim(),
+    internal_sku: elements.posInternalSku.value.trim(),
+    qty: Number(elements.posQty.value),
+    price: Number(elements.posPrice.value),
+  };
+}
+
+function renderPosResult(data) {
+  if (data?.status === 'ok') {
+    elements.posResult.textContent = `Sent ${formatValue(data.sourceId)} to ${formatValue(data.storeCode)} / ${formatValue(data.categoryCode)}.`;
+    return;
+  }
+
+  elements.posResult.textContent = data?.error ? `POS send failed: ${data.error}` : 'POS send failed.';
+}
+
+function setActiveTab(tabName) {
+  const tabs = [
+    { button: elements.tabOpsBtn, panel: elements.tabOps, name: 'ops' },
+    { button: elements.tabPosBtn, panel: elements.tabPos, name: 'pos' },
+    { button: elements.tabBudgetBtn, panel: elements.tabBudget, name: 'budget' },
+  ];
+
+  for (const tab of tabs) {
+    const isActive = tab.name === tabName;
+    tab.button.classList.toggle('is-active', isActive);
+    tab.button.setAttribute('aria-selected', String(isActive));
+    tab.panel.classList.toggle('is-active', isActive);
+    tab.panel.hidden = !isActive;
+  }
 }
 
 function renderPace(data) {
@@ -268,6 +341,31 @@ async function loadDashboard() {
   }
 }
 
+async function submitPosMock(event) {
+  event.preventDefault();
+
+  const payload = buildPosPayload();
+  if (!payload.source_id || !payload.store_code || !payload.timestamp || !payload.category_code || !payload.internal_sku || Number.isNaN(payload.qty) || Number.isNaN(payload.price)) {
+    elements.posResult.textContent = 'Fill all POS fields before sending.';
+    return;
+  }
+
+  try {
+    setLoading(elements.posResult, true);
+    elements.posResult.textContent = 'Sending mock POS...';
+    const response = await requestJson('/pos/ingest', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    renderPosResult(response);
+    await Promise.all([loadPace(), loadPendingRecommendations(), loadDashboard()]);
+  } catch (error) {
+    renderPosResult({ error: error.message });
+  } finally {
+    setLoading(elements.posResult, false);
+  }
+}
+
 async function submitFeedback(event) {
   event.preventDefault();
   readConfig();
@@ -306,6 +404,11 @@ function wireEvents() {
   elements.storeCode.addEventListener('change', readConfig);
   elements.categoryCode.addEventListener('change', readConfig);
   elements.refreshAllBtn.addEventListener('click', refreshAll);
+  elements.tabOpsBtn.addEventListener('click', () => setActiveTab('ops'));
+  elements.tabPosBtn.addEventListener('click', () => setActiveTab('pos'));
+  elements.tabBudgetBtn.addEventListener('click', () => setActiveTab('budget'));
+  elements.loadPosSampleBtn.addEventListener('click', resetPosSample);
+  elements.posForm.addEventListener('submit', submitPosMock);
   elements.loadPaceBtn.addEventListener('click', loadPace);
   elements.loadPendingBtn.addEventListener('click', loadPendingRecommendations);
   elements.loadDashboardBtn.addEventListener('click', loadDashboard);
@@ -322,9 +425,11 @@ function boot() {
   if (elements.apiBaseUrl.value.trim() === '/api' && (window.location.pathname.startsWith('/csp/') || window.location.pathname !== '/')) {
     elements.apiBaseUrl.value = getDefaultApiBaseUrl();
   }
+  resetPosSample();
   clearFeedback();
   readConfig();
   wireEvents();
+  setActiveTab('ops');
   refreshAll();
 }
 

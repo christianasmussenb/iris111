@@ -21,7 +21,7 @@
         </div>
 
         <p class="lead">
-          Vista operativa para monitorear pace, revisar recomendaciones y cerrar el loop de acción desde un solo lugar.
+          Vista operativa para monitorear pace, revisar recomendaciones y cerrar el loop de accion desde un solo lugar.
         </p>
 
         <div class="hero-stats">
@@ -81,71 +81,142 @@
           </div>
         </section>
 
-        <section class="grid">
-          <article class="panel">
-            <div class="panel__header">
-              <h2>Current pace</h2>
-              <button id="loadPaceBtn" class="button" type="button">Load pace</button>
+        <section class="panel panel--tabs">
+          <div class="panel__header panel__header--tabs">
+            <div>
+              <h2>Workspace tabs</h2>
+              <p class="panel-note">Use the operational tab for pace and feedback, and the POS tab to inject mock sales by REST.</p>
             </div>
-            <div id="paceCard" class="state-card state-card--empty">
-              <p>Press <strong>Load pace</strong> to fetch the current category pace.</p>
+            <div class="tab-switcher" role="tablist" aria-label="IRIS111 workspace tabs">
+              <button id="tabOpsBtn" class="tab-btn is-active" type="button" role="tab" aria-controls="tabOps" aria-selected="true">Operacion</button>
+              <button id="tabPosBtn" class="tab-btn" type="button" role="tab" aria-controls="tabPos" aria-selected="false">POS mock</button>
+              <button id="tabBudgetBtn" class="tab-btn tab-btn--muted" type="button" role="tab" aria-controls="tabBudget" aria-selected="false" disabled>Presupuesto</button>
             </div>
-          </article>
-
-          <article class="panel">
-            <div class="panel__header">
-              <h2>Pending recommendations</h2>
-              <button id="loadPendingBtn" class="button" type="button">Load pending</button>
-            </div>
-            <div id="recommendationsList" class="recommendation-list state-card state-card--empty">
-              <p>Recommendations will appear here.</p>
-            </div>
-          </article>
-        </section>
-
-        <section class="panel">
-          <div class="panel__header">
-            <h2>Store dashboard</h2>
-            <button id="loadDashboardBtn" class="button" type="button">Load dashboard</button>
           </div>
-          <div id="dashboardList" class="dashboard state-card state-card--empty">
-            <p>Dashboard rows will appear here.</p>
-          </div>
-        </section>
 
-        <section class="panel panel--feedback">
-          <div class="panel__header">
-            <h2>Recommendation feedback</h2>
-            <span class="pill">Accept / Reject / Modify / Execute</span>
+          <div id="tabOps" class="tab-panel is-active" role="tabpanel" aria-labelledby="tabOpsBtn">
+            <section class="grid">
+              <article class="panel panel--inner">
+                <div class="panel__header">
+                  <h2>Current pace</h2>
+                  <button id="loadPaceBtn" class="button" type="button">Load pace</button>
+                </div>
+                <div id="paceCard" class="state-card state-card--empty">
+                  <p>Press <strong>Load pace</strong> to fetch the current category pace.</p>
+                </div>
+              </article>
+
+              <article class="panel panel--inner">
+                <div class="panel__header">
+                  <h2>Pending recommendations</h2>
+                  <button id="loadPendingBtn" class="button" type="button">Load pending</button>
+                </div>
+                <div id="recommendationsList" class="recommendation-list state-card state-card--empty">
+                  <p>Recommendations will appear here.</p>
+                </div>
+              </article>
+            </section>
+
+            <section class="panel panel--inner">
+              <div class="panel__header">
+                <h2>Store dashboard</h2>
+                <button id="loadDashboardBtn" class="button" type="button">Load dashboard</button>
+              </div>
+              <div id="dashboardList" class="dashboard state-card state-card--empty">
+                <p>Dashboard rows will appear here.</p>
+              </div>
+            </section>
+
+            <section class="panel panel--inner panel--feedback">
+              <div class="panel__header">
+                <h2>Recommendation feedback</h2>
+                <span class="pill">Accept / Reject / Modify / Execute</span>
+              </div>
+              <form id="feedbackForm" class="feedback-form">
+                <label class="field">
+                  <span>Recommendation ID</span>
+                  <input id="recommendationId" type="text" placeholder="Select a pending recommendation" />
+                </label>
+                <label class="field">
+                  <span>Status</span>
+                  <select id="feedbackStatus">
+                    <option value="ACCEPTED">ACCEPTED</option>
+                    <option value="REJECTED">REJECTED</option>
+                    <option value="MODIFIED">MODIFIED</option>
+                    <option value="EXECUTED">EXECUTED</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Accepted by</span>
+                  <input id="acceptedBy" type="text" placeholder="store.manager" />
+                </label>
+                <label class="field field--wide">
+                  <span>Notes</span>
+                  <textarea id="notes" rows="4" placeholder="Add operational notes or modifications"></textarea>
+                </label>
+                <div class="feedback-actions">
+                  <button class="button button--primary" type="submit">Save feedback</button>
+                  <button id="clearFeedbackBtn" class="button button--ghost" type="button">Clear</button>
+                </div>
+              </form>
+              <div id="feedbackResult" class="result-box">No feedback submitted yet.</div>
+            </section>
           </div>
-          <form id="feedbackForm" class="feedback-form">
-            <label class="field">
-              <span>Recommendation ID</span>
-              <input id="recommendationId" type="text" placeholder="Select a pending recommendation" />
-            </label>
-            <label class="field">
-              <span>Status</span>
-              <select id="feedbackStatus">
-                <option value="ACCEPTED">ACCEPTED</option>
-                <option value="REJECTED">REJECTED</option>
-                <option value="MODIFIED">MODIFIED</option>
-                <option value="EXECUTED">EXECUTED</option>
-              </select>
-            </label>
-            <label class="field">
-              <span>Accepted by</span>
-              <input id="acceptedBy" type="text" placeholder="store.manager" />
-            </label>
-            <label class="field field--wide">
-              <span>Notes</span>
-              <textarea id="notes" rows="4" placeholder="Add operational notes or modifications"></textarea>
-            </label>
-            <div class="feedback-actions">
-              <button class="button button--primary" type="submit">Save feedback</button>
-              <button id="clearFeedbackBtn" class="button button--ghost" type="button">Clear</button>
-            </div>
-          </form>
-          <div id="feedbackResult" class="result-box">No feedback submitted yet.</div>
+
+          <div id="tabPos" class="tab-panel" role="tabpanel" aria-labelledby="tabPosBtn" hidden>
+            <section class="panel panel--inner panel--pos">
+              <div class="panel__header">
+                <h2>POS mock injector</h2>
+                <span class="pill">REST /pos/ingest</span>
+              </div>
+              <p class="panel-note">Send a simple mock sale directly to IRIS using REST. Edit the fields and press send.</p>
+              <form id="posForm" class="pos-form">
+                <label class="field">
+                  <span>Source ID</span>
+                  <input id="posSourceId" type="text" value="pos-evt-001" />
+                </label>
+                <label class="field">
+                  <span>Store code</span>
+                  <input id="posStoreCode" type="text" value="GT-0145" />
+                </label>
+                <label class="field">
+                  <span>Timestamp UTC</span>
+                  <input id="posTimestamp" type="text" value="2026-05-13T08:10:00Z" />
+                </label>
+                <label class="field">
+                  <span>Category code</span>
+                  <input id="posCategoryCode" type="text" value="BEBIDAS" />
+                </label>
+                <label class="field">
+                  <span>Internal SKU</span>
+                  <input id="posInternalSku" type="text" value="SKU-1001" />
+                </label>
+                <label class="field">
+                  <span>Qty</span>
+                  <input id="posQty" type="number" min="0" step="1" value="2" />
+                </label>
+                <label class="field">
+                  <span>Price</span>
+                  <input id="posPrice" type="number" min="0" step="1" value="3500" />
+                </label>
+                <div class="pos-actions">
+                  <button class="button button--primary" type="submit">Send mock POS</button>
+                  <button id="loadPosSampleBtn" class="button button--ghost" type="button">Reset sample</button>
+                </div>
+              </form>
+              <div id="posResult" class="result-box">No POS mock sent yet.</div>
+            </section>
+          </div>
+
+          <div id="tabBudget" class="tab-panel" role="tabpanel" aria-labelledby="tabBudgetBtn" hidden>
+            <section class="panel panel--inner">
+              <div class="panel__header">
+                <h2>Budget load</h2>
+                <span class="pill">Coming next</span>
+              </div>
+              <p class="panel-note">The budget import tab will be added next. It will reuse the same tab shell and point to the daily budget CSV / REST load contract.</p>
+            </section>
+          </div>
         </section>
       </main>
     </div>

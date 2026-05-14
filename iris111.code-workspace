@@ -1,0 +1,11 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"name": "localhost:USER",
+			"uri": "isfs://localhost:user/"
+		}
+	]
+}

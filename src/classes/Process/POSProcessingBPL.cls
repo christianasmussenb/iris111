@@ -65,22 +65,42 @@ ClassMethod UpdateGold(storeCode As %String, categoryCode As %String, saleDate A
 	Set paceId = ..BuildPaceId(storeCode, categoryCode, saleDate, saleHour)
 	Set unitsBudget = ..GetBudgetUnits(saleDate, storeCode, categoryCode)
 	Set revenueBudget = ..GetBudgetRevenue(saleDate, storeCode, categoryCode)
-	Set unitsCumulative = quantity
-	Set revenueCumulative = lineTotal
+	Set stmt = ##class(%SQL.Statement).%New()
+	Set sc = stmt.%Prepare("SELECT %ID, UnitsCumulative, RevenueCumulative, UnitsSold, RevenueSold FROM Gold.CategoryPace WHERE PaceId = ?")
+	If $SYSTEM.Status.IsError(sc) Quit sc
+	Set rs = stmt.%Execute(paceId)
+	Set existingPace = 0
+	If rs.%Next() {
+		Set existingPace = ##class(Gold.CategoryPace).%OpenId(rs.%GetData(1))
+	}
+
+	If $IsObject(existingPace) {
+		Set unitsCumulative = +existingPace.UnitsCumulative + quantity
+		Set revenueCumulative = +existingPace.RevenueCumulative + lineTotal
+		Set unitsSold = +existingPace.UnitsSold + quantity
+		Set revenueSold = +existingPace.RevenueSold + lineTotal
+		Set pace = existingPace
+	} Else {
+		Set unitsCumulative = quantity
+		Set revenueCumulative = lineTotal
+		Set unitsSold = quantity
+		Set revenueSold = lineTotal
+		Set pace = ##class(Gold.CategoryPace).%New()
+	}
+
 	Set pctPaceUnits = ..CalculatePct(unitsCumulative, unitsBudget)
 	Set pctPaceRevenue = ..CalculatePct(revenueCumulative, revenueBudget)
 	Set varianceUnits = unitsCumulative - unitsBudget
 	Set varianceRevenue = revenueCumulative - revenueBudget
 	Set lastUpdated = $ZDATETIME($HOROLOG, 3, 1)
 
-	Set pace = ##class(Gold.CategoryPace).%New()
 	Set pace.PaceId = paceId
 	Set pace.PaceDate = saleDate
 	Set pace.PaceHour = saleHour
 	Set pace.StoreCode = storeCode
 	Set pace.CategoryCode = categoryCode
-	Set pace.UnitsSold = quantity
-	Set pace.RevenueSold = lineTotal
+	Set pace.UnitsSold = unitsSold
+	Set pace.RevenueSold = revenueSold
 	Set pace.UnitsBudget = unitsBudget
 	Set pace.RevenueBudget = revenueBudget
 	Set pace.UnitsCumulative = unitsCumulative
