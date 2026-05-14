@@ -3,17 +3,24 @@ const state = {
   storeCode: 'GT-0145',
   categoryCode: 'BEBIDAS',
   pendingRecommendations: [],
+  posBudgetDate: '',
 };
 
 const posDefaults = {
   sourceId: 'pos-evt-001',
   storeCode: 'GT-0145',
-  timestamp: '2026-05-13T08:10:00Z',
   categoryCode: 'BEBIDAS',
-  internalSku: 'SKU-1001',
   qty: '2',
   price: '3500',
 };
+
+const posSkuPool = [
+  'SKU-1001',
+  'SKU-1002',
+  'SKU-1003',
+  'SKU-2001',
+  'SKU-3001',
+];
 
 function getDefaultApiBaseUrl() {
   if (window.location.protocol === 'file:') {
@@ -131,14 +138,46 @@ function formatValue(value, fallback = '--') {
   return value;
 }
 
+function getCurrentUtcTimestamp() {
+  return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
+function toUtcTimestampForDate(dateValue) {
+  const timePart = getCurrentUtcTimestamp().slice(11);
+  return `${dateValue}T${timePart}`;
+}
+
+function getRandomPosSku() {
+  return posSkuPool[Math.floor(Math.random() * posSkuPool.length)];
+}
+
 function resetPosSample() {
   elements.posSourceId.value = posDefaults.sourceId;
   elements.posStoreCode.value = posDefaults.storeCode;
-  elements.posTimestamp.value = posDefaults.timestamp;
+  elements.posTimestamp.value = state.posBudgetDate ? toUtcTimestampForDate(state.posBudgetDate) : getCurrentUtcTimestamp();
   elements.posCategoryCode.value = posDefaults.categoryCode;
-  elements.posInternalSku.value = posDefaults.internalSku;
+  elements.posInternalSku.value = getRandomPosSku();
   elements.posQty.value = posDefaults.qty;
   elements.posPrice.value = posDefaults.price;
+}
+
+async function loadPosBudgetContext() {
+  readConfig();
+  try {
+    const data = await requestJson(`/budget/context/${encodeURIComponent(state.storeCode)}/${encodeURIComponent(state.categoryCode)}`);
+    if (data?.budgetDate) {
+      state.posBudgetDate = data.budgetDate;
+      elements.posResult.textContent = `Budget context loaded for ${data.budgetDate}.`;
+    } else {
+      state.posBudgetDate = '';
+      elements.posResult.textContent = 'No budget context found for this store/category.';
+    }
+  } catch (error) {
+    state.posBudgetDate = '';
+    elements.posResult.textContent = `Budget context load failed: ${error.message}`;
+  }
+
+  resetPosSample();
 }
 
 function buildPosPayload() {
@@ -175,6 +214,10 @@ function setActiveTab(tabName) {
     tab.button.setAttribute('aria-selected', String(isActive));
     tab.panel.classList.toggle('is-active', isActive);
     tab.panel.hidden = !isActive;
+  }
+
+  if (tabName === 'pos') {
+    void loadPosBudgetContext();
   }
 }
 
@@ -358,7 +401,9 @@ async function submitPosMock(event) {
       body: JSON.stringify(payload),
     });
     renderPosResult(response);
-    await Promise.all([loadPace(), loadPendingRecommendations(), loadDashboard()]);
+    setActiveTab('ops');
+    await refreshAll();
+    resetPosSample();
   } catch (error) {
     renderPosResult({ error: error.message });
   } finally {
@@ -401,8 +446,8 @@ function clearFeedback() {
 
 function wireEvents() {
   elements.apiBaseUrl.addEventListener('change', readConfig);
-  elements.storeCode.addEventListener('change', readConfig);
-  elements.categoryCode.addEventListener('change', readConfig);
+  elements.storeCode.addEventListener('change', () => { readConfig(); void loadPosBudgetContext(); });
+  elements.categoryCode.addEventListener('change', () => { readConfig(); void loadPosBudgetContext(); });
   elements.refreshAllBtn.addEventListener('click', refreshAll);
   elements.tabOpsBtn.addEventListener('click', () => setActiveTab('ops'));
   elements.tabPosBtn.addEventListener('click', () => setActiveTab('pos'));
@@ -430,6 +475,7 @@ function boot() {
   readConfig();
   wireEvents();
   setActiveTab('ops');
+  void loadPosBudgetContext();
   refreshAll();
 }
 

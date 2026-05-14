@@ -11,6 +11,7 @@ XData UrlMap
 	<Route Url="/styles.css" Method="GET" Call="GetUIStyles" />
 	<Route Url="/app.js" Method="GET" Call="GetUIApp" />
     <Route Url="/health" Method="GET" Call="GetHealth" />
+	<Route Url="/budget/context/:storeCode/:categoryCode" Method="GET" Call="GetBudgetContext" />
 	<Route Url="/pos/ingest" Method="POST" Call="PostPOSIngest" />
     <Route Url="/stores/:storeCode/categories/:categoryCode/pace" Method="GET" Call="GetPace" />
 	<Route Url="/recommendations/pending/:storeCode" Method="GET" Call="GetRecommendationsPending" />
@@ -74,6 +75,13 @@ ClassMethod PostPOSIngest() As %Status
 	Set result.qty = +payload.%Get("qty")
 	Set result.price = +payload.%Get("price")
 	Do ..WriteJson(result)
+	Quit $$$OK
+}
+
+ClassMethod GetBudgetContext(storeCode As %String, categoryCode As %String) As %Status
+{
+	Set data = ..BuildBudgetContextData(storeCode, categoryCode)
+	Do ..WriteJson(data)
 	Quit $$$OK
 }
 
@@ -219,6 +227,28 @@ ClassMethod BuildDashboardData(storeCode As %String) As %DynamicObject
 	Set rs = stmt.%Execute(data.date, storeCode)
 	While rs.%Next() {
 		Do data.categories.%Push(..PaceRowToObject(rs))
+	}
+	Quit data
+}
+
+ClassMethod BuildBudgetContextData(storeCode As %String, categoryCode As %String) As %DynamicObject
+{
+	Set data = ##class(%DynamicObject).%New()
+	Set data.storeCode = storeCode
+	Set data.categoryCode = categoryCode
+	Set data.timestamp = $ZDATETIME($HOROLOG, 3, 1)
+	Set data.budgetDate = ""
+	Set data.targetUnits = 0
+	Set data.targetRevenue = 0
+
+	Set stmt = ##class(%SQL.Statement).%New()
+	Set sc = stmt.%Prepare("SELECT BudgetDate, TargetUnits, TargetRevenue FROM MD.SalesBudget WHERE StoreCode = ? AND CategoryCode = ? ORDER BY BudgetDate DESC")
+	If $SYSTEM.Status.IsError(sc) Quit data
+	Set rs = stmt.%Execute(storeCode, categoryCode)
+	If rs.%Next() {
+		Set data.budgetDate = $ZDATE(rs.%GetData(1), 3)
+		Set data.targetUnits = rs.%GetData(2)
+		Set data.targetRevenue = rs.%GetData(3)
 	}
 	Quit data
 }
