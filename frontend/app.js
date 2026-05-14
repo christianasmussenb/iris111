@@ -3,6 +3,8 @@ const state = {
   storeCode: 'GT-0145',
   categoryCode: 'BEBIDAS',
   pendingRecommendations: [],
+  budgetRows: [],
+  selectedBudgetRowId: '',
   posBudgetDate: '',
 };
 
@@ -57,6 +59,20 @@ const elements = {
   paceCard: document.getElementById('paceCard'),
   recommendationsList: document.getElementById('recommendationsList'),
   dashboardList: document.getElementById('dashboardList'),
+  budgetForm: document.getElementById('budgetForm'),
+  budgetFilterDate: document.getElementById('budgetFilterDate'),
+  budgetFilterStoreCode: document.getElementById('budgetFilterStoreCode'),
+  budgetFilterCategoryCode: document.getElementById('budgetFilterCategoryCode'),
+  budgetFilterInternalSku: document.getElementById('budgetFilterInternalSku'),
+  budgetDate: document.getElementById('budgetDate'),
+  budgetStoreCode: document.getElementById('budgetStoreCode'),
+  budgetCategoryCode: document.getElementById('budgetCategoryCode'),
+  budgetInternalSku: document.getElementById('budgetInternalSku'),
+  budgetTargetUnits: document.getElementById('budgetTargetUnits'),
+  budgetTargetRevenue: document.getElementById('budgetTargetRevenue'),
+  budgetResult: document.getElementById('budgetResult'),
+  budgetCount: document.getElementById('budgetCount'),
+  budgetList: document.getElementById('budgetList'),
   posForm: document.getElementById('posForm'),
   posSourceId: document.getElementById('posSourceId'),
   posStoreCode: document.getElementById('posStoreCode'),
@@ -77,6 +93,10 @@ const elements = {
   loadPaceBtn: document.getElementById('loadPaceBtn'),
   loadPendingBtn: document.getElementById('loadPendingBtn'),
   loadDashboardBtn: document.getElementById('loadDashboardBtn'),
+  loadBudgetsBtn: document.getElementById('loadBudgetsBtn'),
+  budgetFilterResetBtn: document.getElementById('budgetFilterResetBtn'),
+  budgetResetBtn: document.getElementById('budgetResetBtn'),
+  budgetReloadBtn: document.getElementById('budgetReloadBtn'),
   clearFeedbackBtn: document.getElementById('clearFeedbackBtn'),
   recommendationTemplate: document.getElementById('recommendationTemplate'),
   tabOpsBtn: document.getElementById('tabOpsBtn'),
@@ -93,6 +113,12 @@ function readConfig() {
   state.categoryCode = elements.categoryCode.value.trim() || 'BEBIDAS';
   elements.storeLabel.textContent = state.storeCode;
   elements.categoryLabel.textContent = state.categoryCode;
+  if (elements.budgetStoreCode) {
+    elements.budgetStoreCode.value = state.storeCode;
+  }
+  if (elements.budgetCategoryCode) {
+    elements.budgetCategoryCode.value = state.categoryCode;
+  }
 }
 
 function normalizeBaseUrl(value) {
@@ -142,9 +168,17 @@ function getCurrentUtcTimestamp() {
   return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
 
+function getCurrentUtcDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function toUtcTimestampForDate(dateValue) {
   const timePart = getCurrentUtcTimestamp().slice(11);
   return `${dateValue}T${timePart}`;
+}
+
+function getBudgetDateDefault() {
+  return state.posBudgetDate || getCurrentUtcDate();
 }
 
 function getRandomPosSku() {
@@ -159,6 +193,31 @@ function resetPosSample() {
   elements.posInternalSku.value = getRandomPosSku();
   elements.posQty.value = posDefaults.qty;
   elements.posPrice.value = posDefaults.price;
+}
+
+function resetBudgetSample() {
+  state.selectedBudgetRowId = '';
+  elements.budgetDate.value = getBudgetDateDefault();
+  elements.budgetStoreCode.value = state.storeCode;
+  elements.budgetCategoryCode.value = state.categoryCode;
+  elements.budgetInternalSku.value = '';
+  elements.budgetTargetUnits.value = '0';
+  elements.budgetTargetRevenue.value = '0';
+  elements.budgetResult.textContent = 'Budget form ready.';
+}
+
+function syncBudgetFilterDefaults() {
+  if (elements.budgetFilterDate && !elements.budgetFilterDate.value) {
+    elements.budgetFilterDate.value = getBudgetDateDefault();
+  }
+
+  if (elements.budgetFilterStoreCode && !elements.budgetFilterStoreCode.value) {
+    elements.budgetFilterStoreCode.value = state.storeCode;
+  }
+
+  if (elements.budgetFilterCategoryCode && !elements.budgetFilterCategoryCode.value) {
+    elements.budgetFilterCategoryCode.value = state.categoryCode;
+  }
 }
 
 async function loadPosBudgetContext() {
@@ -178,6 +237,171 @@ async function loadPosBudgetContext() {
   }
 
   resetPosSample();
+  resetBudgetSample();
+  syncBudgetFilterDefaults();
+}
+
+function buildBudgetPayload() {
+  return {
+    budget_date: elements.budgetDate.value.trim(),
+    store_code: elements.budgetStoreCode.value.trim(),
+    category_code: elements.budgetCategoryCode.value.trim(),
+    internal_sku: elements.budgetInternalSku.value.trim(),
+    target_units: Number(elements.budgetTargetUnits.value),
+    target_revenue: Number(elements.budgetTargetRevenue.value),
+  };
+}
+
+function renderBudgetRow(item) {
+  const node = document.createElement('article');
+  node.className = 'budget-row';
+  const isSelected = state.selectedBudgetRowId && state.selectedBudgetRowId === String(item.rowId || '');
+  node.classList.toggle('is-selected', Boolean(isSelected));
+  node.dataset.rowId = String(item.rowId || '');
+  node.innerHTML = `
+    <div class="budget-cell budget-cell--emphasis">${formatValue(item.budgetDate)}</div>
+    <div class="budget-cell">${formatValue(item.storeCode)}</div>
+    <div class="budget-cell">${formatValue(item.categoryCode)}</div>
+    <div class="budget-cell">${item.internalSku || 'CATEGORY ROLLUP'}</div>
+    <div class="budget-cell budget-cell--numeric">${formatValue(item.targetUnits)}</div>
+    <div class="budget-cell budget-cell--numeric">${formatValue(item.targetRevenue)}</div>
+    <div class="budget-cell">${formatValue(item.loadedAt)}</div>
+    <div class="budget-cell budget-cell--actions">
+      <button class="button button--ghost budget-edit-btn" type="button">Load</button>
+    </div>
+  `;
+
+  node.querySelector('.budget-edit-btn').addEventListener('click', () => {
+    state.selectedBudgetRowId = item.rowId || '';
+    elements.budgetDate.value = item.budgetDate || getBudgetDateDefault();
+    elements.budgetStoreCode.value = item.storeCode || state.storeCode;
+    elements.budgetCategoryCode.value = item.categoryCode || state.categoryCode;
+    elements.budgetInternalSku.value = item.internalSku || '';
+    elements.budgetTargetUnits.value = String(item.targetUnits ?? 0);
+    elements.budgetTargetRevenue.value = String(item.targetRevenue ?? 0);
+    elements.budgetResult.textContent = `Loaded budget row ${formatValue(item.rowId)}.`;
+  });
+
+  return node;
+}
+
+function renderBudgets(items) {
+  elements.budgetList.innerHTML = '';
+  const uniqueDays = new Set(items.map((item) => item.budgetDate).filter(Boolean));
+  elements.budgetCount.textContent = `${items.length} row${items.length === 1 ? '' : 's'} · ${uniqueDays.size} day${uniqueDays.size === 1 ? '' : 's'}`;
+
+  if (!items.length) {
+    elements.budgetList.classList.add('state-card--empty');
+    elements.budgetList.innerHTML = '<p>No budget rows match the current filters.</p>';
+    return;
+  }
+
+  elements.budgetList.classList.remove('state-card--empty');
+  for (const item of items) {
+    elements.budgetList.appendChild(renderBudgetRow(item));
+  }
+}
+
+function buildBudgetQueryParams() {
+  const params = new URLSearchParams();
+  const budgetDate = elements.budgetFilterDate.value.trim();
+  const storeCode = elements.budgetFilterStoreCode.value.trim();
+  const categoryCode = elements.budgetFilterCategoryCode.value.trim();
+  const internalSku = elements.budgetFilterInternalSku.value.trim();
+
+  if (budgetDate) params.set('budgetDate', budgetDate);
+  if (storeCode) params.set('storeCode', storeCode);
+  if (categoryCode) params.set('categoryCode', categoryCode);
+  if (internalSku) params.set('internalSku', internalSku);
+
+  return params;
+}
+
+function filterBudgetRows(items) {
+  const budgetDate = elements.budgetFilterDate.value.trim();
+  const storeCode = elements.budgetFilterStoreCode.value.trim();
+  const categoryCode = elements.budgetFilterCategoryCode.value.trim();
+  const internalSku = elements.budgetFilterInternalSku.value.trim();
+
+  return items.filter((item) => {
+    if (budgetDate && item.budgetDate !== budgetDate) {
+      return false;
+    }
+
+    if (storeCode && item.storeCode !== storeCode) {
+      return false;
+    }
+
+    if (categoryCode && item.categoryCode !== categoryCode) {
+      return false;
+    }
+
+    if (internalSku && (item.internalSku || '') !== internalSku) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
+async function loadBudgets() {
+  readConfig();
+
+  try {
+    setLoading(elements.budgetList, true);
+    elements.budgetList.innerHTML = '<p>Loading budget rows...</p>';
+    const data = await requestJson('/budgets');
+    state.budgetRows = Array.isArray(data) ? data : [];
+    renderBudgets(filterBudgetRows(state.budgetRows));
+  } catch (error) {
+    elements.budgetList.innerHTML = `<p>${error.message}</p>`;
+    elements.budgetCount.textContent = '0 rows · 0 days';
+  } finally {
+    setLoading(elements.budgetList, false);
+  }
+}
+
+function clearBudgetFilters() {
+  state.selectedBudgetRowId = '';
+  elements.budgetFilterDate.value = '';
+  elements.budgetFilterStoreCode.value = '';
+  elements.budgetFilterCategoryCode.value = '';
+  elements.budgetFilterInternalSku.value = '';
+  void loadBudgets();
+}
+
+async function submitBudget(event) {
+  event.preventDefault();
+  readConfig();
+
+  const payload = buildBudgetPayload();
+  if (!payload.budget_date || !payload.store_code || !payload.category_code) {
+    elements.budgetResult.textContent = 'Fill budget day, store and category before saving.';
+    return;
+  }
+
+  try {
+    setLoading(elements.budgetResult, true);
+    elements.budgetResult.textContent = 'Saving budget...';
+    const response = await requestJson('/budgets', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+
+    state.selectedBudgetRowId = '';
+    elements.budgetResult.textContent = `Saved ${response?.storeCode || payload.store_code} / ${response?.categoryCode || payload.category_code} / ${response?.budgetDate || payload.budget_date}.`;
+    elements.budgetResult.classList.add('flash');
+    window.setTimeout(() => elements.budgetResult.classList.remove('flash'), 1200);
+    await loadBudgets();
+  } catch (error) {
+    elements.budgetResult.textContent = `Budget save failed: ${error.message}`;
+  } finally {
+    setLoading(elements.budgetResult, false);
+  }
+}
+
+function clearBudgetForm() {
+  resetBudgetSample();
 }
 
 function buildPosPayload() {
@@ -218,6 +442,10 @@ function setActiveTab(tabName) {
 
   if (tabName === 'pos') {
     void loadPosBudgetContext();
+  }
+
+  if (tabName === 'budget') {
+    void loadBudgets();
   }
 }
 
@@ -454,19 +682,28 @@ function wireEvents() {
   elements.tabBudgetBtn.addEventListener('click', () => setActiveTab('budget'));
   elements.loadPosSampleBtn.addEventListener('click', resetPosSample);
   elements.posForm.addEventListener('submit', submitPosMock);
+  elements.budgetForm.addEventListener('submit', submitBudget);
   elements.loadPaceBtn.addEventListener('click', loadPace);
   elements.loadPendingBtn.addEventListener('click', loadPendingRecommendations);
   elements.loadDashboardBtn.addEventListener('click', loadDashboard);
+  elements.loadBudgetsBtn.addEventListener('click', loadBudgets);
+  elements.budgetFilterDate.addEventListener('change', loadBudgets);
+  elements.budgetFilterStoreCode.addEventListener('change', loadBudgets);
+  elements.budgetFilterCategoryCode.addEventListener('change', loadBudgets);
+  elements.budgetFilterInternalSku.addEventListener('change', loadBudgets);
+  elements.budgetFilterResetBtn.addEventListener('click', clearBudgetFilters);
+  elements.budgetReloadBtn.addEventListener('click', loadBudgets);
+  elements.budgetResetBtn.addEventListener('click', clearBudgetForm);
   elements.feedbackForm.addEventListener('submit', submitFeedback);
   elements.clearFeedbackBtn.addEventListener('click', clearFeedback);
 }
 
 async function refreshAll() {
   readConfig();
-  await Promise.all([loadHealth(), loadPace(), loadPendingRecommendations(), loadDashboard()]);
+  await Promise.all([loadHealth(), loadPace(), loadPendingRecommendations(), loadDashboard(), loadBudgets()]);
 }
 
-function boot() {
+async function boot() {
   if (elements.apiBaseUrl.value.trim() === '/api' && (window.location.pathname.startsWith('/csp/') || window.location.pathname !== '/')) {
     elements.apiBaseUrl.value = getDefaultApiBaseUrl();
   }
@@ -475,8 +712,9 @@ function boot() {
   readConfig();
   wireEvents();
   setActiveTab('ops');
-  void loadPosBudgetContext();
-  refreshAll();
+  await loadPosBudgetContext();
+  syncBudgetFilterDefaults();
+  await refreshAll();
 }
 
-boot();
+void boot();

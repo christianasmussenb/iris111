@@ -50,6 +50,7 @@ ClassMethod ImportLine(line As %String) As %Status
 	Set categoryCode = $ZStrip($Piece(line, ",", 3), "<>", " ")
 	Set targetUnits = $ZStrip($Piece(line, ",", 4), "<>", " ")
 	Set targetRevenue = $ZStrip($Piece(line, ",", 5), "<>", " ")
+	Set internalSKU = $Select(parts >= 6:$ZStrip($Piece(line, ",", 6), "<>", " "), 1:"")
 	Set budgetDate = $ZDATEH(budgetDate, 3)
 
 	If budgetDate = "" || storeCode = "" || categoryCode = "" {
@@ -57,29 +58,30 @@ ClassMethod ImportLine(line As %String) As %Status
 	}
 
 	Set loadedAt = $ZDATETIME($HOROLOG, 3, 1)
-	Set ^IRIS111("budget", budgetDate, storeCode, categoryCode, "units") = +targetUnits
-	Set ^IRIS111("budget", budgetDate, storeCode, categoryCode, "revenue") = +targetRevenue
+	Set budgetKey = $Select(internalSKU'="":internalSKU, 1:"__CATEGORY__")
+	Set ^IRIS111("budget", budgetDate, storeCode, categoryCode, budgetKey, "units") = +targetUnits
+	Set ^IRIS111("budget", budgetDate, storeCode, categoryCode, budgetKey, "revenue") = +targetRevenue
 	Set stmt = ##class(%SQL.Statement).%New()
-	Set sql = "SELECT %ID FROM MD.SalesBudget WHERE BudgetDate = ? AND StoreCode = ? AND CategoryCode = ?"
+	Set sql = "SELECT %ID FROM MD.SalesBudget WHERE BudgetDate = ? AND StoreCode = ? AND CategoryCode = ? AND InternalSKU = ?"
 	Set sc = stmt.%Prepare(sql)
 	If $SYSTEM.Status.IsError(sc) Quit sc
-	Set rs = stmt.%Execute(budgetDate, storeCode, categoryCode)
+	Set rs = stmt.%Execute(budgetDate, storeCode, categoryCode, internalSKU)
 
 	If rs.%Next() {
 		Set rowId = rs.%GetData(1)
 		Set stmt = ##class(%SQL.Statement).%New()
-		Set sql = "UPDATE MD.SalesBudget SET TargetUnits = ?, TargetRevenue = ?, LoadedAt = ? WHERE %ID = ?"
+		Set sql = "UPDATE MD.SalesBudget SET TargetUnits = ?, TargetRevenue = ?, LoadedAt = ?, InternalSKU = ? WHERE %ID = ?"
 		Set sc = stmt.%Prepare(sql)
 		If $SYSTEM.Status.IsError(sc) Quit sc
-		Do stmt.%Execute(+targetUnits, +targetRevenue, loadedAt, rowId)
+		Do stmt.%Execute(+targetUnits, +targetRevenue, loadedAt, internalSKU, rowId)
 		Quit 1
 	}
 
 	Set stmt = ##class(%SQL.Statement).%New()
-	Set sql = "INSERT INTO MD.SalesBudget (BudgetDate, StoreCode, CategoryCode, TargetUnits, TargetRevenue, LoadedAt) VALUES (?, ?, ?, ?, ?, ?)"
+	Set sql = "INSERT INTO MD.SalesBudget (BudgetDate, StoreCode, CategoryCode, InternalSKU, TargetUnits, TargetRevenue, LoadedAt) VALUES (?, ?, ?, ?, ?, ?, ?)"
 	Set sc = stmt.%Prepare(sql)
 	If $SYSTEM.Status.IsError(sc) Quit sc
-	Do stmt.%Execute(budgetDate, storeCode, categoryCode, +targetUnits, +targetRevenue, loadedAt)
+	Do stmt.%Execute(budgetDate, storeCode, categoryCode, internalSKU, +targetUnits, +targetRevenue, loadedAt)
 	Quit 1
 }
 

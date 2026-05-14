@@ -90,7 +90,7 @@
             <div class="tab-switcher" role="tablist" aria-label="IRIS111 workspace tabs">
               <button id="tabOpsBtn" class="tab-btn is-active" type="button" role="tab" aria-controls="tabOps" aria-selected="true">Operacion</button>
               <button id="tabPosBtn" class="tab-btn" type="button" role="tab" aria-controls="tabPos" aria-selected="false">POS mock</button>
-              <button id="tabBudgetBtn" class="tab-btn tab-btn--muted" type="button" role="tab" aria-controls="tabBudget" aria-selected="false" disabled>Presupuesto</button>
+              <button id="tabBudgetBtn" class="tab-btn" type="button" role="tab" aria-controls="tabBudget" aria-selected="false">Presupuesto</button>
             </div>
           </div>
 
@@ -209,12 +209,93 @@
           </div>
 
           <div id="tabBudget" class="tab-panel" role="tabpanel" aria-labelledby="tabBudgetBtn" hidden>
-            <section class="panel panel--inner">
-              <div class="panel__header">
-                <h2>Budget load</h2>
-                <span class="pill">Coming next</span>
-              </div>
-              <p class="panel-note">The budget import tab will be added next. It will reuse the same tab shell and point to the daily budget CSV / REST load contract.</p>
+            <section class="grid grid--budget">
+              <article class="panel panel--inner panel--budget panel--budget-review">
+                <div class="panel__header panel__header--budget">
+                  <div>
+                    <h2>Budget review</h2>
+                    <p class="panel-note">Filter by day, local, category or SKU. The table stays sorted by day so you can review the budget day by day.</p>
+                  </div>
+                  <span class="pill" id="budgetCount">0 rows · 0 days</span>
+                </div>
+
+                <div class="budget-toolbar">
+                  <label class="field">
+                    <span>Budget day</span>
+                    <input id="budgetFilterDate" type="date" />
+                  </label>
+                  <label class="field">
+                    <span>Store code</span>
+                    <input id="budgetFilterStoreCode" type="text" placeholder="GT-0145" />
+                  </label>
+                  <label class="field">
+                    <span>Category code</span>
+                    <input id="budgetFilterCategoryCode" type="text" placeholder="BEBIDAS" />
+                  </label>
+                  <label class="field">
+                    <span>Internal SKU</span>
+                    <input id="budgetFilterInternalSku" type="text" placeholder="SKU-0001" />
+                  </label>
+                  <div class="budget-toolbar__actions">
+                    <button id="loadBudgetsBtn" class="button button--primary" type="button">Apply filters</button>
+                    <button id="budgetFilterResetBtn" class="button button--ghost" type="button">Clear filters</button>
+                  </div>
+                </div>
+
+                <div class="budget-grid budget-grid__head" aria-hidden="true">
+                  <div>Day</div>
+                  <div>Local</div>
+                  <div>Category</div>
+                  <div>SKU</div>
+                  <div class="budget-cell--numeric">Units</div>
+                  <div class="budget-cell--numeric">Revenue</div>
+                  <div>Loaded at</div>
+                  <div>Action</div>
+                </div>
+
+                <div id="budgetList" class="budget-grid__body state-card state-card--empty">
+                  <p>Budget rows will appear here.</p>
+                </div>
+              </article>
+
+              <article class="panel panel--inner panel--budget panel--budget-form">
+                <div class="panel__header">
+                  <h2>Budget load and edit</h2>
+                  <button id="budgetReloadBtn" class="button" type="button">Reload list</button>
+                </div>
+                <p class="panel-note">Leave SKU blank for the category rollup row used by POS. Fill SKU to keep a detail budget line for review.</p>
+                <form id="budgetForm" class="budget-form">
+                  <label class="field">
+                    <span>Budget day</span>
+                    <input id="budgetDate" type="date" />
+                  </label>
+                  <label class="field">
+                    <span>Store code</span>
+                    <input id="budgetStoreCode" type="text" value="GT-0145" />
+                  </label>
+                  <label class="field">
+                    <span>Category code</span>
+                    <input id="budgetCategoryCode" type="text" value="BEBIDAS" />
+                  </label>
+                  <label class="field">
+                    <span>Internal SKU</span>
+                    <input id="budgetInternalSku" type="text" placeholder="Optional for detail rows" />
+                  </label>
+                  <label class="field">
+                    <span>Target units</span>
+                    <input id="budgetTargetUnits" type="number" min="0" step="1" value="0" />
+                  </label>
+                  <label class="field">
+                    <span>Target revenue</span>
+                    <input id="budgetTargetRevenue" type="number" min="0" step="1" value="0" />
+                  </label>
+                  <div class="budget-actions">
+                    <button class="button button--primary" type="submit">Save budget</button>
+                    <button id="budgetResetBtn" class="button button--ghost" type="button">Clear form</button>
+                  </div>
+                </form>
+                <div id="budgetResult" class="result-box">No budget saved yet.</div>
+              </article>
             </section>
           </div>
         </section>

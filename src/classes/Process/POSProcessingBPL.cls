@@ -188,23 +188,23 @@ ClassMethod CalculatePct(actual As %Numeric, budget As %Numeric) As %Numeric
 ClassMethod GetBudgetUnits(saleDate As %Date, storeCode As %String, categoryCode As %String) As %Integer
 {
 	Set stmt = ##class(%SQL.Statement).%New()
-	Set sc = stmt.%Prepare("SELECT TargetUnits FROM MD.SalesBudget WHERE BudgetDate = ? AND StoreCode = ? AND CategoryCode = ?")
+	Set sc = stmt.%Prepare("SELECT TargetUnits FROM MD.SalesBudget WHERE BudgetDate = ? AND StoreCode = ? AND CategoryCode = ? AND (InternalSKU IS NULL OR InternalSKU = '')")
 	If '$SYSTEM.Status.IsError(sc) {
 		Set rs = stmt.%Execute(saleDate, storeCode, categoryCode)
 		If rs.%Next() Quit +rs.%GetData(1)
 	}
-	Quit +$Get(^IRIS111("budget", saleDate, storeCode, categoryCode, "units"), 0)
+	Quit +$Get(^IRIS111("budget", saleDate, storeCode, categoryCode, "__CATEGORY__", "units"), 0)
 }
 
 ClassMethod GetBudgetRevenue(saleDate As %Date, storeCode As %String, categoryCode As %String) As %Numeric
 {
 	Set stmt = ##class(%SQL.Statement).%New()
-	Set sc = stmt.%Prepare("SELECT TargetRevenue FROM MD.SalesBudget WHERE BudgetDate = ? AND StoreCode = ? AND CategoryCode = ?")
+	Set sc = stmt.%Prepare("SELECT TargetRevenue FROM MD.SalesBudget WHERE BudgetDate = ? AND StoreCode = ? AND CategoryCode = ? AND (InternalSKU IS NULL OR InternalSKU = '')")
 	If '$SYSTEM.Status.IsError(sc) {
 		Set rs = stmt.%Execute(saleDate, storeCode, categoryCode)
 		If rs.%Next() Quit +rs.%GetData(1)
 	}
-	Quit +$Get(^IRIS111("budget", saleDate, storeCode, categoryCode, "revenue"), 0)
+	Quit +$Get(^IRIS111("budget", saleDate, storeCode, categoryCode, "__CATEGORY__", "revenue"), 0)
 }
 
 ClassMethod CountBelowThreshold(storeCode As %String, categoryCode As %String, saleDate As %Date, threshold As %Numeric = -25) As %Integer

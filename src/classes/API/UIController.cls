@@ -12,6 +12,8 @@ XData UrlMap
 	<Route Url="/app.js" Method="GET" Call="GetUIApp" />
     <Route Url="/health" Method="GET" Call="GetHealth" />
 	<Route Url="/budget/context/:storeCode/:categoryCode" Method="GET" Call="GetBudgetContext" />
+	<Route Url="/budgets" Method="GET" Call="GetBudgets" />
+	<Route Url="/budgets" Method="POST" Call="PostBudget" />
 	<Route Url="/pos/ingest" Method="POST" Call="PostPOSIngest" />
     <Route Url="/stores/:storeCode/categories/:categoryCode/pace" Method="GET" Call="GetPace" />
 	<Route Url="/recommendations/pending/:storeCode" Method="GET" Call="GetRecommendationsPending" />
@@ -82,6 +84,57 @@ ClassMethod GetBudgetContext(storeCode As %String, categoryCode As %String) As %
 {
 	Set data = ..BuildBudgetContextData(storeCode, categoryCode)
 	Do ..WriteJson(data)
+	Quit $$$OK
+}
+
+ClassMethod GetBudgets() As %Status
+{
+	Set budgetDate = $Get(%request.Data("budgetDate"))
+	If budgetDate = "" Set budgetDate = $Get(%request.Data("budget_date"))
+	Set storeCode = $Get(%request.Data("storeCode"))
+	If storeCode = "" Set storeCode = $Get(%request.Data("store_code"))
+	Set categoryCode = $Get(%request.Data("categoryCode"))
+	If categoryCode = "" Set categoryCode = $Get(%request.Data("category_code"))
+	Set internalSKU = $Get(%request.Data("internalSku"))
+	If internalSKU = "" Set internalSKU = $Get(%request.Data("internal_sku"))
+	Set data = ..BuildBudgetsData(budgetDate, storeCode, categoryCode, internalSKU)
+	Do ..AuditRequest("MD.SalesBudget", "LIST", "READ_BUDGETS", "", data.%ToJSON())
+	Do ..WriteJson(data)
+	Quit $$$OK
+}
+
+ClassMethod PostBudget() As %Status
+{
+	Set body = ..ReadRequestBody()
+	Set result = ##class(%DynamicObject).%New()
+
+	If body = "" {
+		Set %response.Status = 400
+		Set result.status = "error"
+		Set result.error = "Budget payload is required"
+		Do ..WriteJson(result)
+		Quit $$$OK
+	}
+
+	Set payload = ##class(%DynamicObject).%FromJSON(body)
+	If '$IsObject(payload) {
+		Set %response.Status = 400
+		Set result.status = "error"
+		Set result.error = "Invalid budget payload JSON"
+		Do ..WriteJson(result)
+		Quit $$$OK
+	}
+
+	Set status = ..SaveBudgetPayload(payload, .result)
+	If $SYSTEM.Status.IsError(status) {
+		Set %response.Status = 400
+		Set result.status = "error"
+		If result.error = "" Set result.error = $SYSTEM.Status.GetErrorText(status)
+		Do ..WriteJson(result)
+		Quit $$$OK
+	}
+
+	Do ..WriteJson(result)
 	Quit $$$OK
 }
 
@@ -242,7 +295,7 @@ ClassMethod BuildBudgetContextData(storeCode As %String, categoryCode As %String
 	Set data.targetRevenue = 0
 
 	Set stmt = ##class(%SQL.Statement).%New()
-	Set sc = stmt.%Prepare("SELECT BudgetDate, TargetUnits, TargetRevenue FROM MD.SalesBudget WHERE StoreCode = ? AND CategoryCode = ? ORDER BY BudgetDate DESC")
+	Set sc = stmt.%Prepare("SELECT BudgetDate, TargetUnits, TargetRevenue FROM MD.SalesBudget WHERE StoreCode = ? AND CategoryCode = ? AND (InternalSKU IS NULL OR InternalSKU = '') ORDER BY BudgetDate DESC")
 	If $SYSTEM.Status.IsError(sc) Quit data
 	Set rs = stmt.%Execute(storeCode, categoryCode)
 	If rs.%Next() {
@@ -250,6 +303,127 @@ ClassMethod BuildBudgetContextData(storeCode As %String, categoryCode As %String
 		Set data.targetUnits = rs.%GetData(2)
 		Set data.targetRevenue = rs.%GetData(3)
 	}
+	Quit data
+}
+
+ClassMethod BuildBudgetsData(budgetDate As %String = "", storeCode As %String = "", categoryCode As %String = "", internalSKU As %String = "") As %DynamicArray
+{
+	Set items = ##class(%DynamicArray).%New()
+
+	Set stmt = ##class(%SQL.Statement).%New()
+	Set sql = "SELECT %ID, BudgetDate, StoreCode, CategoryCode, InternalSKU, TargetUnits, TargetRevenue, LoadedAt FROM MD.SalesBudget ORDER BY BudgetDate DESC, StoreCode, CategoryCode, InternalSKU"
+	Set sc = stmt.%Prepare(sql)
+	If $SYSTEM.Status.IsError(sc) Quit items
+	Set rs = stmt.%Execute()
+	While rs.%Next() {
+		Set row = ..BudgetRowToObject(rs)
+		If budgetDate'="", row.budgetDate'=budgetDate {
+			Continue
+		}
+		If storeCode'="", row.storeCode'=storeCode {
+			Continue
+		}
+		If categoryCode'="", row.categoryCode'=categoryCode {
+			Continue
+		}
+		If internalSKU'="", row.internalSku'=internalSKU {
+			Continue
+		}
+		Do items.%Push(row)
+	}
+	Quit items
+}
+
+ClassMethod SaveBudgetPayload(payload As %DynamicObject, Output result As %DynamicObject) As %Status
+{
+	Set result = ##class(%DynamicObject).%New()
+	Set budgetDate = payload.%Get("budget_date")
+	If budgetDate = "" Set budgetDate = payload.%Get("budgetDate")
+	Set storeCode = payload.%Get("store_code")
+	If storeCode = "" Set storeCode = payload.%Get("storeCode")
+	Set categoryCode = payload.%Get("category_code")
+	If categoryCode = "" Set categoryCode = payload.%Get("categoryCode")
+	Set internalSKU = payload.%Get("internal_sku")
+	If internalSKU = "" Set internalSKU = payload.%Get("internalSku")
+	Set targetUnitsText = payload.%Get("target_units")
+	If targetUnitsText = "" Set targetUnitsText = payload.%Get("targetUnits")
+	Set targetUnits = +targetUnitsText
+	Set targetRevenueText = payload.%Get("target_revenue")
+	If targetRevenueText = "" Set targetRevenueText = payload.%Get("targetRevenue")
+	Set targetRevenue = +targetRevenueText
+
+	If budgetDate = "" {
+		Set result.error = "Budget date is required"
+		Quit $SYSTEM.Status.Error(5001, "Budget date is required")
+	}
+
+	Set budgetDateH = $ZDATEH(budgetDate, 3)
+	If budgetDateH = "" {
+		Set result.error = "Budget date is invalid"
+		Quit $SYSTEM.Status.Error(5001, "Budget date is invalid")
+	}
+
+	If storeCode = "" || categoryCode = "" {
+		Set result.error = "Store and category are required"
+		Quit $SYSTEM.Status.Error(5001, "Store and category are required")
+	}
+
+	Set stmt = ##class(%SQL.Statement).%New()
+	Set sc = stmt.%Prepare("SELECT %ID FROM MD.SalesBudget WHERE BudgetDate = ? AND StoreCode = ? AND CategoryCode = ? AND InternalSKU = ?")
+	If $SYSTEM.Status.IsError(sc) {
+		Set result.error = "Budget lookup failed"
+		Quit sc
+	}
+	Set rs = stmt.%Execute(budgetDateH, storeCode, categoryCode, internalSKU)
+	Set loadedAt = $ZDATETIME($HOROLOG, 3, 1)
+	If rs.%Next() {
+		Set rowId = rs.%GetData(1)
+		Set stmt = ##class(%SQL.Statement).%New()
+		Set sc = stmt.%Prepare("UPDATE MD.SalesBudget SET TargetUnits = ?, TargetRevenue = ?, LoadedAt = ?, InternalSKU = ? WHERE %ID = ?")
+		If $SYSTEM.Status.IsError(sc) {
+			Set result.error = "Budget update failed"
+			Quit sc
+		}
+		Set sc = stmt.%Execute(targetUnits, targetRevenue, loadedAt, internalSKU, rowId)
+		If $SYSTEM.Status.IsError(sc) {
+			Set result.error = "Budget update failed"
+			Quit sc
+		}
+	} Else {
+		Set stmt = ##class(%SQL.Statement).%New()
+		Set sc = stmt.%Prepare("INSERT INTO MD.SalesBudget (BudgetDate, StoreCode, CategoryCode, InternalSKU, TargetUnits, TargetRevenue, LoadedAt) VALUES (?, ?, ?, ?, ?, ?, ?)")
+		If $SYSTEM.Status.IsError(sc) {
+			Set result.error = "Budget insert failed"
+			Quit sc
+		}
+		Set sc = stmt.%Execute(budgetDateH, storeCode, categoryCode, internalSKU, targetUnits, targetRevenue, loadedAt)
+		If $SYSTEM.Status.IsError(sc) {
+			Set result.error = "Budget insert failed"
+			Quit sc
+		}
+	}
+
+	Set result.status = "ok"
+	Set result.message = "Budget saved"
+	Set result.budgetDate = budgetDate
+	Set result.storeCode = storeCode
+	Set result.categoryCode = categoryCode
+	Set result.internalSku = internalSKU
+	Set result.targetUnits = targetUnits
+	Set result.targetRevenue = targetRevenue
+	Quit $$$OK
+}
+ClassMethod BudgetRowToObject(row As %SQL.StatementResult) As %DynamicObject
+{
+	Set data = ##class(%DynamicObject).%New()
+	Set data.rowId = row.%GetData(1)
+	Set data.budgetDate = $ZDATE(row.%GetData(2), 3)
+	Set data.storeCode = row.%GetData(3)
+	Set data.categoryCode = row.%GetData(4)
+	Set data.internalSku = row.%GetData(5)
+	Set data.targetUnits = row.%GetData(6)
+	Set data.targetRevenue = row.%GetData(7)
+	Set data.loadedAt = row.%GetData(8)
 	Quit data
 }
 

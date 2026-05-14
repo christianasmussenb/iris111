@@ -34,6 +34,7 @@ Useful local commands:
 
 ```bash
 ./scripts/load_classes.sh
+./scripts/load_mock_master_data.sh
 ./scripts/run_tests.sh all
 python3 ./scripts/mock_data_loader.py
 ```
