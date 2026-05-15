@@ -3,308 +3,323 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>IRIS111 | Store Action Console</title>
+    <title>IRIS111 | Consola de accion de tienda</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <div class="shell">
-      <aside class="hero">
-        <div class="brand-row">
-          <div class="brand-mark">I111</div>
-          <div>
-            <p class="eyebrow">IRIS111 PoC</p>
-            <h1>Store Action Console</h1>
-          </div>
-        </div>
-
-        <p class="lead">
-          Vista operativa para monitorear pace, revisar recomendaciones y cerrar el loop de accion desde un solo lugar.
-        </p>
-
-        <div class="hero-stats">
-          <article>
-            <span>Health</span>
-            <strong id="healthStatus">--</strong>
-          </article>
-          <article>
-            <span>Store</span>
-            <strong id="storeLabel">GT-0145</strong>
-          </article>
-          <article>
-            <span>Category</span>
-            <strong id="categoryLabel">BEBIDAS</strong>
-          </article>
-        </div>
-
-        <div class="panel panel--compact">
-          <div class="panel__header">
-            <h2>Connection</h2>
-            <button id="refreshAllBtn" class="button button--ghost" type="button">Refresh all</button>
-          </div>
-          <label class="field">
-            <span>API base URL</span>
-            <input id="apiBaseUrl" type="text" value="/api" placeholder="/api" />
-          </label>
-          <label class="field">
-            <span>Store code</span>
-            <input id="storeCode" type="text" value="GT-0145" />
-          </label>
-          <label class="field">
-            <span>Category code</span>
-            <input id="categoryCode" type="text" value="BEBIDAS" />
-          </label>
-        </div>
-      </aside>
-
       <main class="content">
-        <section class="panel panel--headline">
+        <section class="panel panel--nav">
           <div>
-            <p class="eyebrow">Operating loop</p>
-            <h2>Pace, recommendations and feedback</h2>
+            <p class="eyebrow">Temas</p>
+            <h2>Elige una seccion</h2>
           </div>
-          <div class="inline-metrics">
-            <div>
-              <span>Latest pace</span>
-              <strong id="paceValue">--</strong>
-            </div>
-            <div>
-              <span>Pending recs</span>
-              <strong id="pendingCount">--</strong>
-            </div>
-            <div>
-              <span>Dashboard rows</span>
-              <strong id="dashboardCount">--</strong>
-            </div>
+          <div class="tab-switcher tab-switcher--theme" role="tablist" aria-label="Pestañas de temas de IRIS111">
+            <button id="themeOverviewBtn" class="tab-btn is-active" type="button" role="tab" aria-controls="panelOverview" aria-selected="true">Resumen</button>
+            <button id="themeConnectionBtn" class="tab-btn" type="button" role="tab" aria-controls="panelConnection" aria-selected="false">Conexion</button>
+            <button id="themeStagesBtn" class="tab-btn" type="button" role="tab" aria-controls="panelStages" aria-selected="false">Etapas</button>
+            <button id="themeOpsBtn" class="tab-btn" type="button" role="tab" aria-controls="panelOperations" aria-selected="false">Operacion</button>
+            <button id="themePosBtn" class="tab-btn" type="button" role="tab" aria-controls="panelPos" aria-selected="false">POS de prueba</button>
+            <button id="themeBudgetBtn" class="tab-btn" type="button" role="tab" aria-controls="panelBudget" aria-selected="false">Presupuesto</button>
           </div>
         </section>
 
-        <section class="panel panel--tabs">
+        <section id="panelOverview" class="panel panel--hero theme-panel" role="tabpanel" aria-labelledby="themeOverviewBtn">
+          <div class="hero-copy">
+            <div class="brand-row">
+              <div class="brand-mark">I111</div>
+              <div>
+                <p class="eyebrow">PoC IRIS111</p>
+                <h1>Consola de accion de tienda</h1>
+              </div>
+            </div>
+
+            <p class="lead">
+              Vista operativa para monitorear la cadencia de ventas, revisar recomendaciones y cerrar el ciclo de accion desde un solo lugar.
+            </p>
+          </div>
+
+          <div class="hero-summary">
+            <article>
+              <span>Salud</span>
+              <strong id="healthStatus">--</strong>
+            </article>
+            <article>
+              <span>Local</span>
+              <strong id="storeLabel">GT-0145</strong>
+            </article>
+            <article>
+              <span>Categoria</span>
+              <strong id="categoryLabel">BEBIDAS</strong>
+            </article>
+            <article>
+              <span>Cadencia de ventas actual</span>
+              <strong id="paceValue">--</strong>
+            </article>
+            <article>
+              <span>Recomendaciones pendientes</span>
+              <strong id="pendingCount">--</strong>
+            </article>
+            <article>
+              <span>Filas del panel</span>
+              <strong id="dashboardCount">--</strong>
+            </article>
+          </div>
+        </section>
+
+        <section id="panelConnection" class="panel panel--compact panel--connection theme-panel" role="tabpanel" aria-labelledby="themeConnectionBtn" hidden>
+          <div class="panel__header">
+            <div>
+                <p class="eyebrow">Conexion</p>
+                <h2>Controles de ejecucion</h2>
+            </div>
+              <button id="refreshAllBtn" class="button button--ghost" type="button">Refrescar todo</button>
+          </div>
+          <div class="connection-grid">
+            <label class="field">
+                <span>URL base de la API</span>
+              <input id="apiBaseUrl" type="text" value="/api" placeholder="/api" />
+            </label>
+            <label class="field">
+                <span>Codigo del local</span>
+              <input id="storeCode" type="text" value="GT-0145" />
+            </label>
+            <label class="field">
+                <span>Codigo de categoria</span>
+              <input id="categoryCode" type="text" value="BEBIDAS" />
+            </label>
+          </div>
+        </section>
+
+        <section id="panelStages" class="panel panel--stages theme-panel" role="tabpanel" aria-labelledby="themeStagesBtn" hidden>
+          <div class="panel__header panel__header--stacked">
+            <div>
+              <p class="eyebrow">Ciclo operativo</p>
+              <h2>Etapas del proceso</h2>
+            </div>
+              <p class="panel-note">La consola ahora muestra la cadena operativa completa en lugar de un resumen lateral.</p>
+          </div>
+          <div class="stage-grid" id="stageGrid" aria-label="Etapas del proceso de IRIS111"></div>
+        </section>
+
+        <section id="panelOperations" class="panel panel--operations theme-panel" role="tabpanel" aria-labelledby="themeOpsBtn" hidden>
           <div class="panel__header panel__header--tabs">
             <div>
-              <h2>Workspace tabs</h2>
-              <p class="panel-note">Use the operational tab for pace and feedback, and the POS tab to inject mock sales by REST.</p>
-            </div>
-            <div class="tab-switcher" role="tablist" aria-label="IRIS111 workspace tabs">
-              <button id="tabOpsBtn" class="tab-btn is-active" type="button" role="tab" aria-controls="tabOps" aria-selected="true">Operacion</button>
-              <button id="tabPosBtn" class="tab-btn" type="button" role="tab" aria-controls="tabPos" aria-selected="false">POS mock</button>
-              <button id="tabBudgetBtn" class="tab-btn" type="button" role="tab" aria-controls="tabBudget" aria-selected="false">Presupuesto</button>
+              <h2>Espacio operativo</h2>
+              <p class="panel-note">Cadencia de ventas, recomendaciones, panel y feedback quedan juntos, pero ahora aislados en su propia pestaña.</p>
             </div>
           </div>
 
-          <div id="tabOps" class="tab-panel is-active" role="tabpanel" aria-labelledby="tabOpsBtn">
-            <section class="grid">
-              <article class="panel panel--inner">
-                <div class="panel__header">
-                  <h2>Current pace</h2>
-                  <button id="loadPaceBtn" class="button" type="button">Load pace</button>
-                </div>
-                <div id="paceCard" class="state-card state-card--empty">
-                  <p>Press <strong>Load pace</strong> to fetch the current category pace.</p>
-                </div>
-              </article>
-
-              <article class="panel panel--inner">
-                <div class="panel__header">
-                  <h2>Pending recommendations</h2>
-                  <button id="loadPendingBtn" class="button" type="button">Load pending</button>
-                </div>
-                <div id="recommendationsList" class="recommendation-list state-card state-card--empty">
-                  <p>Recommendations will appear here.</p>
-                </div>
-              </article>
-            </section>
-
-            <section class="panel panel--inner">
+          <section class="grid">
+            <article class="panel panel--inner">
               <div class="panel__header">
-                <h2>Store dashboard</h2>
-                <button id="loadDashboardBtn" class="button" type="button">Load dashboard</button>
+                <h2>Cadencia de ventas actual</h2>
+                <button id="loadPaceBtn" class="button" type="button">Cargar cadencia de ventas</button>
               </div>
-              <div id="dashboardList" class="dashboard state-card state-card--empty">
-                <p>Dashboard rows will appear here.</p>
+              <div id="paceCard" class="state-card state-card--empty">
+                <p>Presiona <strong>Cargar cadencia de ventas</strong> para traer la cadencia de ventas actual de la categoria.</p>
               </div>
-            </section>
+            </article>
 
-            <section class="panel panel--inner panel--feedback">
+            <article class="panel panel--inner">
               <div class="panel__header">
-                <h2>Recommendation feedback</h2>
-                <span class="pill">Accept / Reject / Modify / Execute</span>
+                <h2>Recomendaciones pendientes</h2>
+                <button id="loadPendingBtn" class="button" type="button">Cargar pendientes</button>
               </div>
-              <form id="feedbackForm" class="feedback-form">
+              <div id="recommendationsList" class="recommendation-list state-card state-card--empty">
+                <p>Las recomendaciones apareceran aqui.</p>
+              </div>
+            </article>
+          </section>
+
+          <section class="panel panel--inner">
+            <div class="panel__header">
+              <h2>Panel del local</h2>
+              <button id="loadDashboardBtn" class="button" type="button">Cargar panel</button>
+            </div>
+            <div id="dashboardList" class="dashboard state-card state-card--empty">
+              <p>Las filas del panel apareceran aqui.</p>
+            </div>
+          </section>
+
+          <section class="panel panel--inner panel--feedback">
+            <div class="panel__header">
+              <h2>Feedback de recomendaciones</h2>
+              <span class="pill">Aceptar / Rechazar / Modificar / Ejecutar</span>
+            </div>
+            <form id="feedbackForm" class="feedback-form">
+              <label class="field">
+                <span>ID de recomendacion</span>
+                <input id="recommendationId" type="text" placeholder="Selecciona una recomendacion pendiente" />
+              </label>
+              <label class="field">
+                <span>Estado</span>
+                <select id="feedbackStatus">
+                  <option value="ACCEPTED">ACEPTADA</option>
+                  <option value="REJECTED">RECHAZADA</option>
+                  <option value="MODIFIED">MODIFICADA</option>
+                  <option value="EXECUTED">EJECUTADA</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Aceptada por</span>
+                <input id="acceptedBy" type="text" placeholder="store.manager" />
+              </label>
+              <label class="field field--wide">
+                <span>Notas</span>
+                <textarea id="notes" rows="4" placeholder="Agrega notas operativas o modificaciones"></textarea>
+              </label>
+              <div class="feedback-actions">
+                <button class="button button--primary" type="submit">Guardar feedback</button>
+                <button id="clearFeedbackBtn" class="button button--ghost" type="button">Limpiar</button>
+              </div>
+            </form>
+            <div id="feedbackResult" class="result-box">Aun no se envio feedback.</div>
+          </section>
+        </section>
+
+        <section id="panelPos" class="panel panel--pos theme-panel" role="tabpanel" aria-labelledby="themePosBtn" hidden>
+          <div class="panel__header">
+            <h2>Inyector POS de prueba</h2>
+            <span class="pill">REST /pos/ingest</span>
+          </div>
+          <p class="panel-note">Envia una venta de prueba directamente a IRIS por REST. Edita los campos y presiona enviar.</p>
+          <form id="posForm" class="pos-form">
+            <label class="field">
+              <span>ID de origen</span>
+              <input id="posSourceId" type="text" value="pos-evt-001" />
+            </label>
+            <label class="field">
+              <span>Codigo del local</span>
+              <input id="posStoreCode" type="text" value="GT-0145" />
+            </label>
+            <label class="field">
+              <span>Marca de tiempo UTC</span>
+              <input id="posTimestamp" type="text" value="2026-05-13T08:10:00Z" />
+            </label>
+            <label class="field">
+              <span>Codigo de categoria</span>
+              <input id="posCategoryCode" type="text" value="BEBIDAS" />
+            </label>
+            <label class="field">
+              <span>SKU interno</span>
+              <input id="posInternalSku" type="text" value="SKU-1001" />
+            </label>
+            <label class="field">
+              <span>Cantidad</span>
+              <input id="posQty" type="number" min="0" step="1" value="2" />
+            </label>
+            <label class="field">
+              <span>Precio</span>
+              <input id="posPrice" type="number" min="0" step="1" value="3500" />
+            </label>
+            <div class="pos-actions">
+              <button class="button button--primary" type="submit">Enviar POS de prueba</button>
+              <button id="loadPosSampleBtn" class="button button--ghost" type="button">Restablecer muestra</button>
+            </div>
+          </form>
+          <div id="posResult" class="result-box">Todavia no se envio ningun POS de prueba.</div>
+        </section>
+
+        <section id="panelBudget" class="panel panel--budget theme-panel" role="tabpanel" aria-labelledby="themeBudgetBtn" hidden>
+          <section class="grid grid--budget">
+            <article class="panel panel--inner panel--budget panel--budget-form">
+              <div class="panel__header">
+                <h2>Carga y edicion de presupuesto</h2>
+                <button id="budgetReloadBtn" class="button" type="button">Recargar lista</button>
+              </div>
+              <p class="panel-note">Deja el SKU en blanco para la fila consolidada de categoria que usa POS. Completa el SKU para conservar una linea de detalle.</p>
+              <form id="budgetForm" class="budget-form">
                 <label class="field">
-                  <span>Recommendation ID</span>
-                  <input id="recommendationId" type="text" placeholder="Select a pending recommendation" />
+                  <span>Dia del presupuesto</span>
+                  <input id="budgetDate" type="date" />
                 </label>
                 <label class="field">
-                  <span>Status</span>
-                  <select id="feedbackStatus">
-                    <option value="ACCEPTED">ACCEPTED</option>
-                    <option value="REJECTED">REJECTED</option>
-                    <option value="MODIFIED">MODIFIED</option>
-                    <option value="EXECUTED">EXECUTED</option>
-                  </select>
+                  <span>Codigo del local</span>
+                  <input id="budgetStoreCode" type="text" value="GT-0145" />
                 </label>
                 <label class="field">
-                  <span>Accepted by</span>
-                  <input id="acceptedBy" type="text" placeholder="store.manager" />
+                  <span>Codigo de categoria</span>
+                  <input id="budgetCategoryCode" type="text" value="BEBIDAS" />
                 </label>
-                <label class="field field--wide">
-                  <span>Notes</span>
-                  <textarea id="notes" rows="4" placeholder="Add operational notes or modifications"></textarea>
+                <label class="field">
+                  <span>SKU interno</span>
+                  <input id="budgetInternalSku" type="text" placeholder="Opcional para filas de detalle" />
                 </label>
-                <div class="feedback-actions">
-                  <button class="button button--primary" type="submit">Save feedback</button>
-                  <button id="clearFeedbackBtn" class="button button--ghost" type="button">Clear</button>
+                <label class="field">
+                  <span>Unidades objetivo</span>
+                  <input id="budgetTargetUnits" type="number" min="0" step="1" value="0" />
+                </label>
+                <label class="field">
+                  <span>Ingresos objetivo</span>
+                  <input id="budgetTargetRevenue" type="number" min="0" step="1" value="0" />
+                </label>
+                <div class="budget-actions">
+                  <button class="button button--primary" type="submit">Guardar presupuesto</button>
+                  <button id="budgetResetBtn" class="button button--ghost" type="button">Limpiar formulario</button>
                 </div>
               </form>
-              <div id="feedbackResult" class="result-box">No feedback submitted yet.</div>
-            </section>
-          </div>
+              <div id="budgetResult" class="result-box">Aun no se guardo ningun presupuesto.</div>
+            </article>
 
-          <div id="tabPos" class="tab-panel" role="tabpanel" aria-labelledby="tabPosBtn" hidden>
-            <section class="panel panel--inner panel--pos">
-              <div class="panel__header">
-                <h2>POS mock injector</h2>
-                <span class="pill">REST /pos/ingest</span>
+            <article class="panel panel--inner panel--budget panel--budget-review">
+              <div class="panel__header panel__header--budget">
+                <div>
+                  <h2>Revision de presupuesto</h2>
+                  <p class="panel-note">Filtra por dia, local, categoria o SKU. La tabla se mantiene ordenada por dia para revisar el presupuesto dia a dia.</p>
+                </div>
+                <span class="pill" id="budgetCount">0 filas · 0 dias</span>
               </div>
-              <p class="panel-note">Send a simple mock sale directly to IRIS using REST. Edit the fields and press send.</p>
-              <form id="posForm" class="pos-form">
-                <label class="field">
-                  <span>Source ID</span>
-                  <input id="posSourceId" type="text" value="pos-evt-001" />
-                </label>
-                <label class="field">
-                  <span>Store code</span>
-                  <input id="posStoreCode" type="text" value="GT-0145" />
-                </label>
-                <label class="field">
-                  <span>Timestamp UTC</span>
-                  <input id="posTimestamp" type="text" value="2026-05-13T08:10:00Z" />
-                </label>
-                <label class="field">
-                  <span>Category code</span>
-                  <input id="posCategoryCode" type="text" value="BEBIDAS" />
-                </label>
-                <label class="field">
-                  <span>Internal SKU</span>
-                  <input id="posInternalSku" type="text" value="SKU-1001" />
-                </label>
-                <label class="field">
-                  <span>Qty</span>
-                  <input id="posQty" type="number" min="0" step="1" value="2" />
-                </label>
-                <label class="field">
-                  <span>Price</span>
-                  <input id="posPrice" type="number" min="0" step="1" value="3500" />
-                </label>
-                <div class="pos-actions">
-                  <button class="button button--primary" type="submit">Send mock POS</button>
-                  <button id="loadPosSampleBtn" class="button button--ghost" type="button">Reset sample</button>
-                </div>
-              </form>
-              <div id="posResult" class="result-box">No POS mock sent yet.</div>
-            </section>
-          </div>
 
-          <div id="tabBudget" class="tab-panel" role="tabpanel" aria-labelledby="tabBudgetBtn" hidden>
-            <section class="grid grid--budget">
-              <article class="panel panel--inner panel--budget panel--budget-review">
-                <div class="panel__header panel__header--budget">
-                  <div>
-                    <h2>Budget review</h2>
-                    <p class="panel-note">Filter by day, local, category or SKU. The table stays sorted by day so you can review the budget day by day.</p>
-                  </div>
-                  <span class="pill" id="budgetCount">0 rows · 0 days</span>
+              <div class="budget-toolbar">
+                <label class="field">
+                  <span>Dia del presupuesto</span>
+                  <input id="budgetFilterDate" type="date" />
+                </label>
+                <label class="field">
+                  <span>Codigo del local</span>
+                  <input id="budgetFilterStoreCode" type="text" placeholder="GT-0145" />
+                </label>
+                <label class="field">
+                  <span>Codigo de categoria</span>
+                  <input id="budgetFilterCategoryCode" type="text" placeholder="BEBIDAS" />
+                </label>
+                <label class="field">
+                  <span>SKU interno</span>
+                  <input id="budgetFilterInternalSku" type="text" placeholder="SKU-0001" />
+                </label>
+                <div class="budget-toolbar__actions">
+                  <button id="loadBudgetsBtn" class="button button--primary" type="button">Aplicar filtros</button>
+                  <button id="budgetFilterResetBtn" class="button button--ghost" type="button">Limpiar filtros</button>
                 </div>
+              </div>
 
-                <div class="budget-toolbar">
-                  <label class="field">
-                    <span>Budget day</span>
-                    <input id="budgetFilterDate" type="date" />
-                  </label>
-                  <label class="field">
-                    <span>Store code</span>
-                    <input id="budgetFilterStoreCode" type="text" placeholder="GT-0145" />
-                  </label>
-                  <label class="field">
-                    <span>Category code</span>
-                    <input id="budgetFilterCategoryCode" type="text" placeholder="BEBIDAS" />
-                  </label>
-                  <label class="field">
-                    <span>Internal SKU</span>
-                    <input id="budgetFilterInternalSku" type="text" placeholder="SKU-0001" />
-                  </label>
-                  <div class="budget-toolbar__actions">
-                    <button id="loadBudgetsBtn" class="button button--primary" type="button">Apply filters</button>
-                    <button id="budgetFilterResetBtn" class="button button--ghost" type="button">Clear filters</button>
-                  </div>
-                </div>
+              <div class="budget-grid budget-grid__head" aria-hidden="true">
+                <div>Dia</div>
+                <div>Local</div>
+                <div>Categoria</div>
+                <div>SKU</div>
+                <div class="budget-cell--numeric">Unidades</div>
+                <div class="budget-cell--numeric">Ingresos</div>
+                <div>Cargado en</div>
+                <div>Accion</div>
+              </div>
 
-                <div class="budget-grid budget-grid__head" aria-hidden="true">
-                  <div>Day</div>
-                  <div>Local</div>
-                  <div>Category</div>
-                  <div>SKU</div>
-                  <div class="budget-cell--numeric">Units</div>
-                  <div class="budget-cell--numeric">Revenue</div>
-                  <div>Loaded at</div>
-                  <div>Action</div>
-                </div>
-
-                <div id="budgetList" class="budget-grid__body state-card state-card--empty">
-                  <p>Budget rows will appear here.</p>
-                </div>
-              </article>
-
-              <article class="panel panel--inner panel--budget panel--budget-form">
-                <div class="panel__header">
-                  <h2>Budget load and edit</h2>
-                  <button id="budgetReloadBtn" class="button" type="button">Reload list</button>
-                </div>
-                <p class="panel-note">Leave SKU blank for the category rollup row used by POS. Fill SKU to keep a detail budget line for review.</p>
-                <form id="budgetForm" class="budget-form">
-                  <label class="field">
-                    <span>Budget day</span>
-                    <input id="budgetDate" type="date" />
-                  </label>
-                  <label class="field">
-                    <span>Store code</span>
-                    <input id="budgetStoreCode" type="text" value="GT-0145" />
-                  </label>
-                  <label class="field">
-                    <span>Category code</span>
-                    <input id="budgetCategoryCode" type="text" value="BEBIDAS" />
-                  </label>
-                  <label class="field">
-                    <span>Internal SKU</span>
-                    <input id="budgetInternalSku" type="text" placeholder="Optional for detail rows" />
-                  </label>
-                  <label class="field">
-                    <span>Target units</span>
-                    <input id="budgetTargetUnits" type="number" min="0" step="1" value="0" />
-                  </label>
-                  <label class="field">
-                    <span>Target revenue</span>
-                    <input id="budgetTargetRevenue" type="number" min="0" step="1" value="0" />
-                  </label>
-                  <div class="budget-actions">
-                    <button class="button button--primary" type="submit">Save budget</button>
-                    <button id="budgetResetBtn" class="button button--ghost" type="button">Clear form</button>
-                  </div>
-                </form>
-                <div id="budgetResult" class="result-box">No budget saved yet.</div>
-              </article>
-            </section>
-          </div>
+              <div id="budgetList" class="budget-grid__body state-card state-card--empty">
+                <p>Las filas del presupuesto apareceran aqui.</p>
+              </div>
+            </article>
+          </section>
         </section>
       </main>
     </div>
 
     <template id="recommendationTemplate">
       <article class="recommendation-item">
-        <div class="recommendation-item__top">
+          <div class="recommendation-item__top">
           <div>
             <strong class="rec-title"></strong>
             <p class="rec-subtitle"></p>
@@ -312,14 +327,17 @@
           <span class="pill rec-status"></span>
         </div>
         <dl class="rec-grid">
-          <div><dt>Rule</dt><dd class="rec-rule"></dd></div>
-          <div><dt>Priority</dt><dd class="rec-priority"></dd></div>
-          <div><dt>Severity</dt><dd class="rec-severity"></dd></div>
-          <div><dt>Window</dt><dd class="rec-window"></dd></div>
+          <div><dt>Regla</dt><dd class="rec-rule"></dd></div>
+          <div><dt>Prioridad</dt><dd class="rec-priority"></dd></div>
+          <div><dt>Severidad</dt><dd class="rec-severity"></dd></div>
+          <div><dt>Ventana</dt><dd class="rec-window"></dd></div>
+          <div><dt>Observado</dt><dd class="rec-observed"></dd></div>
+          <div><dt>Ejecucion</dt><dd class="rec-execution"></dd></div>
+          <div><dt>Disparada</dt><dd class="rec-triggered"></dd></div>
         </dl>
         <p class="rec-message"></p>
         <div class="rec-actions">
-          <button class="button button--ghost select-rec-btn" type="button">Use this recommendation</button>
+          <button class="button button--ghost select-rec-btn" type="button">Usar esta recomendacion</button>
         </div>
       </article>
     </template>

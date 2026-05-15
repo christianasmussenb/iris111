@@ -2,10 +2,14 @@ const state = {
   apiBaseUrl: getDefaultApiBaseUrl(),
   storeCode: 'GT-0145',
   categoryCode: 'BEBIDAS',
+  healthStatus: '--',
+  paceData: null,
   pendingRecommendations: [],
+  dashboardRows: [],
   budgetRows: [],
   selectedBudgetRowId: '',
   posBudgetDate: '',
+  lastFeedbackMessage: 'Aun no se envio feedback.',
 };
 
 const posDefaults = {
@@ -56,6 +60,7 @@ const elements = {
   paceValue: document.getElementById('paceValue'),
   pendingCount: document.getElementById('pendingCount'),
   dashboardCount: document.getElementById('dashboardCount'),
+  stageGrid: document.getElementById('stageGrid'),
   paceCard: document.getElementById('paceCard'),
   recommendationsList: document.getElementById('recommendationsList'),
   dashboardList: document.getElementById('dashboardList'),
@@ -99,12 +104,18 @@ const elements = {
   budgetReloadBtn: document.getElementById('budgetReloadBtn'),
   clearFeedbackBtn: document.getElementById('clearFeedbackBtn'),
   recommendationTemplate: document.getElementById('recommendationTemplate'),
-  tabOpsBtn: document.getElementById('tabOpsBtn'),
-  tabPosBtn: document.getElementById('tabPosBtn'),
-  tabBudgetBtn: document.getElementById('tabBudgetBtn'),
-  tabOps: document.getElementById('tabOps'),
-  tabPos: document.getElementById('tabPos'),
-  tabBudget: document.getElementById('tabBudget'),
+  themeOverviewBtn: document.getElementById('themeOverviewBtn'),
+  themeConnectionBtn: document.getElementById('themeConnectionBtn'),
+  themeStagesBtn: document.getElementById('themeStagesBtn'),
+  themeOpsBtn: document.getElementById('themeOpsBtn'),
+  themePosBtn: document.getElementById('themePosBtn'),
+  themeBudgetBtn: document.getElementById('themeBudgetBtn'),
+  panelOverview: document.getElementById('panelOverview'),
+  panelConnection: document.getElementById('panelConnection'),
+  panelStages: document.getElementById('panelStages'),
+  panelOperations: document.getElementById('panelOperations'),
+  panelPos: document.getElementById('panelPos'),
+  panelBudget: document.getElementById('panelBudget'),
 };
 
 function readConfig() {
@@ -113,6 +124,7 @@ function readConfig() {
   state.categoryCode = elements.categoryCode.value.trim() || 'BEBIDAS';
   elements.storeLabel.textContent = state.storeCode;
   elements.categoryLabel.textContent = state.categoryCode;
+  renderStages();
   if (elements.budgetStoreCode) {
     elements.budgetStoreCode.value = state.storeCode;
   }
@@ -146,7 +158,7 @@ async function requestJson(path, options = {}) {
   }
 
   if (!response.ok) {
-    const message = data?.error || data?.message || response.statusText || 'Request failed';
+    const message = data?.error || data?.message || response.statusText || 'La solicitud fallo';
     throw new Error(message);
   }
 
@@ -155,6 +167,182 @@ async function requestJson(path, options = {}) {
 
 function setLoading(element, isLoading) {
   element.classList.toggle('is-loading', isLoading);
+}
+
+function translateUiStatus(value) {
+  const normalized = String(value || '').toUpperCase();
+  const map = {
+    OK: 'operativo',
+    ERROR: 'error',
+    CONNECTED: 'conectado',
+    PENDING: 'pendiente',
+    NEW: 'nueva',
+    ACCEPTED: 'aceptada',
+    REJECTED: 'rechazada',
+    MODIFIED: 'modificada',
+    EXECUTED: 'ejecutada',
+    CLEAR: 'sin pendientes',
+    ATTENTION: 'atencion',
+    UPDATED: 'actualizado',
+    WAITING: 'en espera',
+    GOOD: 'ok',
+    WARN: 'alerta',
+    DANGER: 'critico',
+    PACE: 'ritmo',
+  };
+
+  return map[normalized] || value || '--';
+}
+
+function setActiveTheme(themeName) {
+  const tabs = [
+    { button: elements.themeOverviewBtn, panel: elements.panelOverview, name: 'overview' },
+    { button: elements.themeConnectionBtn, panel: elements.panelConnection, name: 'connection' },
+    { button: elements.themeStagesBtn, panel: elements.panelStages, name: 'stages' },
+    { button: elements.themeOpsBtn, panel: elements.panelOperations, name: 'operations' },
+    { button: elements.themePosBtn, panel: elements.panelPos, name: 'pos' },
+    { button: elements.themeBudgetBtn, panel: elements.panelBudget, name: 'budget' },
+  ];
+
+  for (const tab of tabs) {
+    const isActive = tab.name === themeName;
+    tab.button.classList.toggle('is-active', isActive);
+    tab.button.setAttribute('aria-selected', String(isActive));
+    tab.panel.hidden = !isActive;
+  }
+
+  if (themeName === 'operations') {
+    void Promise.all([loadPace(), loadPendingRecommendations(), loadDashboard()]);
+  }
+
+  if (themeName === 'pos') {
+    void loadPosBudgetContext();
+  }
+
+  if (themeName === 'budget') {
+    void loadBudgets();
+  }
+
+  renderStages();
+}
+
+function createStageCard({ title, subtitle, value, note, statusLabel, tone = 'neutral', metrics = [] }) {
+  const article = document.createElement('article');
+  article.className = `stage-card stage-card--${tone}`;
+  article.innerHTML = `
+    <div class="stage-card__top">
+      <div>
+        <p class="stage-card__subtitle">${subtitle}</p>
+        <h3>${title}</h3>
+      </div>
+      <span class="pill stage-pill stage-pill--${tone}">${statusLabel}</span>
+    </div>
+    <strong class="stage-card__value">${value}</strong>
+    <p class="stage-card__note">${note}</p>
+    <dl class="stage-metrics">
+      ${metrics.map((metric) => `
+        <div>
+          <dt>${metric.label}</dt>
+          <dd>${metric.value}</dd>
+        </div>
+      `).join('')}
+    </dl>
+  `;
+  return article;
+}
+
+function renderStages() {
+  if (!elements.stageGrid) {
+    return;
+  }
+
+  const pace = state.paceData || {};
+  const recCount = state.pendingRecommendations.length;
+  const dashboardCount = state.dashboardRows.length;
+  const paceTone = pace?.error === 'PACE_NOT_FOUND'
+    ? 'warn'
+    : Number(pace?.pctPaceUnits) >= 100
+      ? 'good'
+      : Number(pace?.pctPaceUnits) >= 90
+        ? 'warn'
+        : 'danger';
+  const recommendationTone = recCount === 0 ? 'good' : 'warn';
+  const feedbackTone = state.lastFeedbackMessage.startsWith('Feedback guardado') ? 'good' : 'neutral';
+  const paceStatusLabel = pace?.error === 'PACE_NOT_FOUND'
+    ? 'SIN DATOS'
+    : paceTone === 'good'
+      ? 'OK'
+      : paceTone === 'warn'
+        ? 'ALERTA'
+        : 'CRITICO';
+  const recommendationStatusLabel = recCount === 0 ? 'SIN PENDIENTES' : 'ATENCION';
+  const feedbackStatusLabel = state.lastFeedbackMessage.startsWith('Feedback guardado') ? 'ACTUALIZADO' : 'EN ESPERA';
+
+  elements.stageGrid.innerHTML = '';
+  elements.stageGrid.appendChild(createStageCard({
+    title: 'Ingesta',
+    subtitle: 'Configuracion en tiempo real',
+    value: state.apiBaseUrl,
+    note: 'La consola esta lista para leer y escribir contra el endpoint activo de IRIS.',
+    statusLabel: 'CONECTADO',
+    tone: 'good',
+    metrics: [
+      { label: 'Local', value: state.storeCode },
+      { label: 'Categoria', value: state.categoryCode },
+      { label: 'Contexto de presupuesto', value: state.posBudgetDate || 'pendiente' },
+    ],
+  }));
+
+  elements.stageGrid.appendChild(createStageCard({
+    title: 'Calculo',
+    subtitle: 'Gold / ritmo',
+    value: pace?.error === 'PACE_NOT_FOUND' ? 'Sin fila de cadencia de ventas' : `${formatValue(pace?.pctPaceUnits)}% de cadencia de ventas`,
+    note: pace?.error === 'PACE_NOT_FOUND'
+      ? 'No existe una fila de cadencia de ventas para el local y la categoria seleccionados.'
+      : 'Este bloque resume la senal mas reciente de ventas contra presupuesto que expone Gold.',
+    statusLabel: paceStatusLabel,
+    tone: paceTone,
+    metrics: [
+      { label: 'Unidades vendidas', value: formatValue(pace?.unitsSold) },
+      { label: 'Unidades presupuestadas', value: formatValue(pace?.unitsBudget) },
+      { label: 'Variacion', value: formatValue(pace?.varianceUnits) },
+    ],
+  }));
+
+  const firstRecommendation = state.pendingRecommendations[0];
+  elements.stageGrid.appendChild(createStageCard({
+    title: 'Recomendaciones',
+    subtitle: 'Salida del motor de reglas',
+    value: recCount === 0 ? 'Sin pendientes' : `${recCount} pendientes`,
+    note: firstRecommendation
+      ? firstRecommendation.BusinessMessage || firstRecommendation.ActionDescription || 'La recomendacion pendiente esta lista para revision.'
+      : 'Cuando una regla dispara, la cola de recomendaciones se vuelve el punto de control del operador.',
+    statusLabel: recommendationStatusLabel,
+    tone: recommendationTone,
+    metrics: firstRecommendation ? [
+      { label: 'Prioridad', value: formatValue(firstRecommendation.RulePriority) },
+      { label: 'Severidad', value: formatValue(firstRecommendation.RuleSeverity) },
+      { label: 'Regla', value: formatValue(firstRecommendation.RuleFired) },
+    ] : [
+      { label: 'Prioridad', value: '--' },
+      { label: 'Severidad', value: '--' },
+      { label: 'Regla', value: '--' },
+    ],
+  }));
+
+  elements.stageGrid.appendChild(createStageCard({
+    title: 'Feedback',
+    subtitle: 'Cierre operativo',
+    value: state.lastFeedbackMessage,
+    note: 'Esta etapa cierra el ciclo al persistir la respuesta del operador y refrescar la cola pendiente.',
+    statusLabel: feedbackStatusLabel,
+    tone: feedbackTone,
+    metrics: [
+      { label: 'Backlog pendiente', value: String(recCount) },
+      { label: 'Filas del panel', value: String(dashboardCount) },
+      { label: 'Salud', value: state.healthStatus },
+    ],
+  }));
 }
 
 function formatValue(value, fallback = '--') {
@@ -203,7 +391,7 @@ function resetBudgetSample() {
   elements.budgetInternalSku.value = '';
   elements.budgetTargetUnits.value = '0';
   elements.budgetTargetRevenue.value = '0';
-  elements.budgetResult.textContent = 'Budget form ready.';
+  elements.budgetResult.textContent = 'Formulario de presupuesto listo.';
 }
 
 function syncBudgetFilterDefaults() {
@@ -226,19 +414,20 @@ async function loadPosBudgetContext() {
     const data = await requestJson(`/budget/context/${encodeURIComponent(state.storeCode)}/${encodeURIComponent(state.categoryCode)}`);
     if (data?.budgetDate) {
       state.posBudgetDate = data.budgetDate;
-      elements.posResult.textContent = `Budget context loaded for ${data.budgetDate}.`;
+      elements.posResult.textContent = `Contexto de presupuesto cargado para ${data.budgetDate}.`;
     } else {
       state.posBudgetDate = '';
-      elements.posResult.textContent = 'No budget context found for this store/category.';
+      elements.posResult.textContent = 'No se encontro contexto de presupuesto para este local/categoria.';
     }
   } catch (error) {
     state.posBudgetDate = '';
-    elements.posResult.textContent = `Budget context load failed: ${error.message}`;
+    elements.posResult.textContent = `Error al cargar el contexto de presupuesto: ${error.message}`;
   }
 
   resetPosSample();
   resetBudgetSample();
   syncBudgetFilterDefaults();
+  renderStages();
 }
 
 function buildBudgetPayload() {
@@ -262,12 +451,12 @@ function renderBudgetRow(item) {
     <div class="budget-cell budget-cell--emphasis">${formatValue(item.budgetDate)}</div>
     <div class="budget-cell">${formatValue(item.storeCode)}</div>
     <div class="budget-cell">${formatValue(item.categoryCode)}</div>
-    <div class="budget-cell">${item.internalSku || 'CATEGORY ROLLUP'}</div>
+    <div class="budget-cell">${item.internalSku || 'CONSOLIDADO DE CATEGORIA'}</div>
     <div class="budget-cell budget-cell--numeric">${formatValue(item.targetUnits)}</div>
     <div class="budget-cell budget-cell--numeric">${formatValue(item.targetRevenue)}</div>
     <div class="budget-cell">${formatValue(item.loadedAt)}</div>
     <div class="budget-cell budget-cell--actions">
-      <button class="button button--ghost budget-edit-btn" type="button">Load</button>
+      <button class="button button--ghost budget-edit-btn" type="button">Cargar</button>
     </div>
   `;
 
@@ -279,7 +468,7 @@ function renderBudgetRow(item) {
     elements.budgetInternalSku.value = item.internalSku || '';
     elements.budgetTargetUnits.value = String(item.targetUnits ?? 0);
     elements.budgetTargetRevenue.value = String(item.targetRevenue ?? 0);
-    elements.budgetResult.textContent = `Loaded budget row ${formatValue(item.rowId)}.`;
+    elements.budgetResult.textContent = `Fila de presupuesto cargada ${formatValue(item.rowId)}.`;
   });
 
   return node;
@@ -288,11 +477,11 @@ function renderBudgetRow(item) {
 function renderBudgets(items) {
   elements.budgetList.innerHTML = '';
   const uniqueDays = new Set(items.map((item) => item.budgetDate).filter(Boolean));
-  elements.budgetCount.textContent = `${items.length} row${items.length === 1 ? '' : 's'} · ${uniqueDays.size} day${uniqueDays.size === 1 ? '' : 's'}`;
+  elements.budgetCount.textContent = `${items.length} fila${items.length === 1 ? '' : 's'} · ${uniqueDays.size} dia${uniqueDays.size === 1 ? '' : 's'}`;
 
   if (!items.length) {
     elements.budgetList.classList.add('state-card--empty');
-    elements.budgetList.innerHTML = '<p>No budget rows match the current filters.</p>';
+    elements.budgetList.innerHTML = '<p>No hay filas de presupuesto que coincidan con los filtros actuales.</p>';
     return;
   }
 
@@ -349,13 +538,13 @@ async function loadBudgets() {
 
   try {
     setLoading(elements.budgetList, true);
-    elements.budgetList.innerHTML = '<p>Loading budget rows...</p>';
+    elements.budgetList.innerHTML = '<p>Cargando filas de presupuesto...</p>';
     const data = await requestJson('/budgets');
     state.budgetRows = Array.isArray(data) ? data : [];
     renderBudgets(filterBudgetRows(state.budgetRows));
   } catch (error) {
     elements.budgetList.innerHTML = `<p>${error.message}</p>`;
-    elements.budgetCount.textContent = '0 rows · 0 days';
+    elements.budgetCount.textContent = '0 filas · 0 dias';
   } finally {
     setLoading(elements.budgetList, false);
   }
@@ -376,25 +565,25 @@ async function submitBudget(event) {
 
   const payload = buildBudgetPayload();
   if (!payload.budget_date || !payload.store_code || !payload.category_code) {
-    elements.budgetResult.textContent = 'Fill budget day, store and category before saving.';
+    elements.budgetResult.textContent = 'Completa el dia, el local y la categoria antes de guardar.';
     return;
   }
 
   try {
     setLoading(elements.budgetResult, true);
-    elements.budgetResult.textContent = 'Saving budget...';
+    elements.budgetResult.textContent = 'Guardando presupuesto...';
     const response = await requestJson('/budgets', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
 
     state.selectedBudgetRowId = '';
-    elements.budgetResult.textContent = `Saved ${response?.storeCode || payload.store_code} / ${response?.categoryCode || payload.category_code} / ${response?.budgetDate || payload.budget_date}.`;
+    elements.budgetResult.textContent = `Guardado ${response?.storeCode || payload.store_code} / ${response?.categoryCode || payload.category_code} / ${response?.budgetDate || payload.budget_date}.`;
     elements.budgetResult.classList.add('flash');
     window.setTimeout(() => elements.budgetResult.classList.remove('flash'), 1200);
     await loadBudgets();
   } catch (error) {
-    elements.budgetResult.textContent = `Budget save failed: ${error.message}`;
+    elements.budgetResult.textContent = `Error al guardar el presupuesto: ${error.message}`;
   } finally {
     setLoading(elements.budgetResult, false);
   }
@@ -418,81 +607,59 @@ function buildPosPayload() {
 
 function renderPosResult(data) {
   if (data?.status === 'ok') {
-    elements.posResult.textContent = `Sent ${formatValue(data.sourceId)} to ${formatValue(data.storeCode)} / ${formatValue(data.categoryCode)}.`;
+    elements.posResult.textContent = `Enviado ${formatValue(data.sourceId)} a ${formatValue(data.storeCode)} / ${formatValue(data.categoryCode)}.`;
     return;
   }
 
-  elements.posResult.textContent = data?.error ? `POS send failed: ${data.error}` : 'POS send failed.';
-}
-
-function setActiveTab(tabName) {
-  const tabs = [
-    { button: elements.tabOpsBtn, panel: elements.tabOps, name: 'ops' },
-    { button: elements.tabPosBtn, panel: elements.tabPos, name: 'pos' },
-    { button: elements.tabBudgetBtn, panel: elements.tabBudget, name: 'budget' },
-  ];
-
-  for (const tab of tabs) {
-    const isActive = tab.name === tabName;
-    tab.button.classList.toggle('is-active', isActive);
-    tab.button.setAttribute('aria-selected', String(isActive));
-    tab.panel.classList.toggle('is-active', isActive);
-    tab.panel.hidden = !isActive;
-  }
-
-  if (tabName === 'pos') {
-    void loadPosBudgetContext();
-  }
-
-  if (tabName === 'budget') {
-    void loadBudgets();
-  }
+  elements.posResult.textContent = data?.error ? `Error al enviar el POS: ${data.error}` : 'Error al enviar el POS.';
 }
 
 function renderPace(data) {
+  state.paceData = data;
   if (data?.error === 'PACE_NOT_FOUND') {
-    elements.paceCard.innerHTML = '<p>No pace row found for the selected store and category.</p>';
-    elements.paceValue.textContent = 'No data';
+    elements.paceCard.innerHTML = '<p>No se encontro una fila de cadencia de ventas para el local y la categoria seleccionados.</p>';
+    elements.paceValue.textContent = 'Sin datos';
+    renderStages();
     return;
   }
 
   elements.paceCard.innerHTML = `
-    <div class="metric-grid">
-      <div class="recommendation-item">
-        <strong>${formatValue(data.paceId)}</strong>
-        <p>Pace ID</p>
+    <div class="pace-summary">
+      <div class="pace-summary__headline">
+        <strong>${formatValue(data.pctPaceUnits)}%</strong>
+        <span>${formatValue(data.paceId)}</span>
       </div>
-      <div class="recommendation-item">
-        <strong>${formatValue(data.paceHour)}</strong>
-        <p>Hour</p>
-      </div>
-      <div class="recommendation-item">
-        <strong>${formatValue(data.unitsSold)}</strong>
-        <p>Units sold</p>
-      </div>
-      <div class="recommendation-item">
-        <strong>${formatValue(data.unitsBudget)}</strong>
-        <p>Budget units</p>
-      </div>
-      <div class="recommendation-item">
-        <strong>${formatValue(data.varianceUnits)}</strong>
-        <p>Variance units</p>
-      </div>
-      <div class="recommendation-item">
-        <strong>${formatValue(data.pctPaceUnits)}</strong>
-        <p>% pace units</p>
+      <div class="metric-grid metric-grid--pace">
+        <div class="stat-card">
+          <span>Hora</span>
+          <strong>${formatValue(data.paceHour)}</strong>
+        </div>
+        <div class="stat-card">
+          <span>Unidades vendidas</span>
+          <strong>${formatValue(data.unitsSold)}</strong>
+        </div>
+        <div class="stat-card">
+          <span>Unidades presupuestadas</span>
+          <strong>${formatValue(data.unitsBudget)}</strong>
+        </div>
+        <div class="stat-card">
+          <span>Variacion en unidades</span>
+          <strong>${formatValue(data.varianceUnits)}</strong>
+        </div>
       </div>
     </div>
   `;
   elements.paceValue.textContent = `${formatValue(data.pctPaceUnits)}%`;
+  renderStages();
 }
 
 function renderRecommendations(items) {
+  state.pendingRecommendations = Array.isArray(items) ? items : [];
   elements.recommendationsList.innerHTML = '';
 
   if (!items.length) {
     elements.recommendationsList.classList.add('state-card--empty');
-    elements.recommendationsList.innerHTML = '<p>No pending recommendations right now.</p>';
+    elements.recommendationsList.innerHTML = '<p>No hay recomendaciones pendientes por ahora.</p>';
     elements.pendingCount.textContent = '0';
     return;
   }
@@ -502,34 +669,40 @@ function renderRecommendations(items) {
 
   for (const item of items) {
     const node = elements.recommendationTemplate.content.cloneNode(true);
-    node.querySelector('.rec-title').textContent = item.ActionDescription || item.ActionCode || 'Recommendation';
-    node.querySelector('.rec-subtitle').textContent = `${item.StoreCode} · ${item.CategoryCode} · ${item.RelatedPaceId || 'no pace id'}`;
-    node.querySelector('.rec-status').textContent = item.Status || 'PENDING';
+    node.querySelector('.rec-title').textContent = item.ActionDescription || item.ActionCode || 'Recomendacion';
+    node.querySelector('.rec-subtitle').textContent = `${item.StoreCode} · ${item.CategoryCode} · ${item.RelatedPaceId || 'sin ID de pace'}`;
+    node.querySelector('.rec-status').textContent = translateUiStatus(item.Status || 'PENDING');
     node.querySelector('.rec-rule').textContent = item.RuleFired || '--';
     node.querySelector('.rec-priority').textContent = formatValue(item.RulePriority);
     node.querySelector('.rec-severity').textContent = formatValue(item.RuleSeverity);
     node.querySelector('.rec-window').textContent = `${formatValue(item.RuleWindowType)} · ${formatValue(item.RuleThreshold)}`;
-    node.querySelector('.rec-message').textContent = item.BusinessMessage || '';
+    node.querySelector('.rec-message').textContent = item.BusinessMessage || item.Notes || '';
+    node.querySelector('.rec-observed').textContent = formatValue(item.RuleObservedValue);
+    node.querySelector('.rec-execution').textContent = formatValue(item.ExecutionState);
+    node.querySelector('.rec-triggered').textContent = formatValue(item.TriggeredAt);
 
     node.querySelector('.select-rec-btn').addEventListener('click', () => {
       elements.recommendationId.value = item.RecommendationId;
-      elements.feedbackResult.textContent = `Loaded recommendation ${item.RecommendationId}`;
+      elements.feedbackResult.textContent = `Recomendacion cargada ${item.RecommendationId}`;
       elements.feedbackResult.classList.add('flash');
       window.setTimeout(() => elements.feedbackResult.classList.remove('flash'), 1200);
     });
 
     elements.recommendationsList.appendChild(node);
   }
+
+  renderStages();
 }
 
 function renderDashboard(data) {
   elements.dashboardList.innerHTML = '';
   const items = Array.isArray(data.categories) ? data.categories : [];
+  state.dashboardRows = items;
   elements.dashboardCount.textContent = String(items.length);
 
   if (!items.length) {
     elements.dashboardList.classList.add('state-card--empty');
-    elements.dashboardList.innerHTML = '<p>No dashboard rows available for the selected store.</p>';
+    elements.dashboardList.innerHTML = '<p>No hay filas de panel disponibles para el local seleccionado.</p>';
     return;
   }
 
@@ -543,29 +716,35 @@ function renderDashboard(data) {
           <strong>${row.CategoryCode || '--'}</strong>
           <p>${row.PaceHour ?? '--'}h · ${row.PaceId || ''}</p>
         </div>
-        <span class="pill">${formatValue(row.Status || row.ExecutionState || 'PACE')}</span>
+        <span class="pill">${translateUiStatus(row.Status || row.ExecutionState || 'PACE')}</span>
       </div>
       <div class="rec-grid">
-        <div><dt>Units sold</dt><dd>${formatValue(row.UnitsSold)}</dd></div>
-        <div><dt>Variance</dt><dd>${formatValue(row.VarianceUnits)}</dd></div>
-        <div><dt>Budget units</dt><dd>${formatValue(row.UnitsBudget)}</dd></div>
-        <div><dt>Last updated</dt><dd>${formatValue(row.LastUpdated)}</dd></div>
+        <div><dt>Unidades vendidas</dt><dd>${formatValue(row.UnitsSold)}</dd></div>
+        <div><dt>Variacion</dt><dd>${formatValue(row.VarianceUnits)}</dd></div>
+        <div><dt>Unidades presupuestadas</dt><dd>${formatValue(row.UnitsBudget)}</dd></div>
+        <div><dt>Ultima actualizacion</dt><dd>${formatValue(row.LastUpdated)}</dd></div>
       </div>
+      <p class="rec-message">${row.RuleSeverity || 'PACE'} · ${row.BusinessMessage || 'Fila de resumen operativo'}</p>
     `;
     elements.dashboardList.appendChild(item);
   }
+
+  renderStages();
 }
 
 async function loadHealth() {
   try {
     setLoading(elements.healthStatus, true);
     const data = await requestJson('/health');
-    elements.healthStatus.textContent = data.status || 'ok';
+    state.healthStatus = translateUiStatus(data.status || 'ok');
+    elements.healthStatus.textContent = state.healthStatus;
   } catch (error) {
+    state.healthStatus = 'error';
     elements.healthStatus.textContent = 'error';
-    elements.feedbackResult.textContent = `Health check failed: ${error.message}`;
+    elements.feedbackResult.textContent = `Error en la verificacion de salud: ${error.message}`;
   } finally {
     setLoading(elements.healthStatus, false);
+    renderStages();
   }
 }
 
@@ -573,7 +752,7 @@ async function loadPace() {
   readConfig();
   try {
     setLoading(elements.paceCard, true);
-    elements.paceCard.innerHTML = '<p>Loading pace...</p>';
+    elements.paceCard.innerHTML = '<p>Cargando cadencia de ventas...</p>';
     const data = await requestJson(`/stores/${encodeURIComponent(state.storeCode)}/categories/${encodeURIComponent(state.categoryCode)}/pace`);
     renderPace(data);
   } catch (error) {
@@ -587,7 +766,7 @@ async function loadPendingRecommendations() {
   readConfig();
   try {
     setLoading(elements.recommendationsList, true);
-    elements.recommendationsList.innerHTML = '<p>Loading pending recommendations...</p>';
+    elements.recommendationsList.innerHTML = '<p>Cargando recomendaciones pendientes...</p>';
     const data = await requestJson(`/recommendations/pending/${encodeURIComponent(state.storeCode)}`);
     state.pendingRecommendations = Array.isArray(data) ? data : [];
     renderRecommendations(state.pendingRecommendations);
@@ -602,7 +781,7 @@ async function loadDashboard() {
   readConfig();
   try {
     setLoading(elements.dashboardList, true);
-    elements.dashboardList.innerHTML = '<p>Loading dashboard...</p>';
+    elements.dashboardList.innerHTML = '<p>Cargando panel...</p>';
     const data = await requestJson(`/dashboard/store/${encodeURIComponent(state.storeCode)}`);
     renderDashboard(data);
   } catch (error) {
@@ -617,19 +796,19 @@ async function submitPosMock(event) {
 
   const payload = buildPosPayload();
   if (!payload.source_id || !payload.store_code || !payload.timestamp || !payload.category_code || !payload.internal_sku || Number.isNaN(payload.qty) || Number.isNaN(payload.price)) {
-    elements.posResult.textContent = 'Fill all POS fields before sending.';
+    elements.posResult.textContent = 'Completa todos los campos del POS antes de enviar.';
     return;
   }
 
   try {
     setLoading(elements.posResult, true);
-    elements.posResult.textContent = 'Sending mock POS...';
+    elements.posResult.textContent = 'Enviando POS de prueba...';
     const response = await requestJson('/pos/ingest', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
     renderPosResult(response);
-    setActiveTab('ops');
+    setActiveTheme('operations');
     await refreshAll();
     resetPosSample();
   } catch (error) {
@@ -645,31 +824,38 @@ async function submitFeedback(event) {
 
   const recommendationId = elements.recommendationId.value.trim();
   if (!recommendationId) {
-    elements.feedbackResult.textContent = 'Select a recommendation first.';
+    elements.feedbackResult.textContent = 'Primero selecciona una recomendacion.';
     return;
   }
 
   try {
-    const params = new URLSearchParams({
-    });
     const response = await requestJson(`/recommendations/${encodeURIComponent(recommendationId)}/feedback/${encodeURIComponent(elements.feedbackStatus.value)}/${encodeURIComponent(elements.acceptedBy.value.trim() || 'store.manager')}/${encodeURIComponent(elements.notes.value.trim() || '-')}`, {
       method: 'POST',
     });
 
-    elements.feedbackResult.textContent = `Saved feedback for ${recommendationId} (${response?.after?.Status || elements.feedbackStatus.value}).`;
+    state.lastFeedbackMessage = `Feedback guardado para ${recommendationId} (${translateUiStatus(response?.after?.Status || elements.feedbackStatus.value)}).`;
+    elements.feedbackResult.textContent = state.lastFeedbackMessage;
     elements.feedbackResult.classList.add('flash');
     window.setTimeout(() => elements.feedbackResult.classList.remove('flash'), 1200);
     await loadPendingRecommendations();
+    renderStages();
   } catch (error) {
-    elements.feedbackResult.textContent = `Feedback failed: ${error.message}`;
+    state.lastFeedbackMessage = `Error al enviar feedback: ${error.message}`;
+    elements.feedbackResult.textContent = `Error al enviar feedback: ${error.message}`;
+    renderStages();
   }
 }
 
-function clearFeedback() {
+function clearFeedback(preserveMessage = false) {
   elements.recommendationId.value = '';
   elements.acceptedBy.value = '';
   elements.notes.value = '';
   elements.feedbackStatus.value = 'ACCEPTED';
+  if (!preserveMessage) {
+    state.lastFeedbackMessage = 'Formulario de feedback limpiado.';
+    elements.feedbackResult.textContent = state.lastFeedbackMessage;
+  }
+  renderStages();
 }
 
 function wireEvents() {
@@ -677,9 +863,12 @@ function wireEvents() {
   elements.storeCode.addEventListener('change', () => { readConfig(); void loadPosBudgetContext(); });
   elements.categoryCode.addEventListener('change', () => { readConfig(); void loadPosBudgetContext(); });
   elements.refreshAllBtn.addEventListener('click', refreshAll);
-  elements.tabOpsBtn.addEventListener('click', () => setActiveTab('ops'));
-  elements.tabPosBtn.addEventListener('click', () => setActiveTab('pos'));
-  elements.tabBudgetBtn.addEventListener('click', () => setActiveTab('budget'));
+  elements.themeOverviewBtn.addEventListener('click', () => setActiveTheme('overview'));
+  elements.themeConnectionBtn.addEventListener('click', () => setActiveTheme('connection'));
+  elements.themeStagesBtn.addEventListener('click', () => setActiveTheme('stages'));
+  elements.themeOpsBtn.addEventListener('click', () => setActiveTheme('operations'));
+  elements.themePosBtn.addEventListener('click', () => setActiveTheme('pos'));
+  elements.themeBudgetBtn.addEventListener('click', () => setActiveTheme('budget'));
   elements.loadPosSampleBtn.addEventListener('click', resetPosSample);
   elements.posForm.addEventListener('submit', submitPosMock);
   elements.budgetForm.addEventListener('submit', submitBudget);
@@ -701,6 +890,7 @@ function wireEvents() {
 async function refreshAll() {
   readConfig();
   await Promise.all([loadHealth(), loadPace(), loadPendingRecommendations(), loadDashboard(), loadBudgets()]);
+  renderStages();
 }
 
 async function boot() {
@@ -708,10 +898,10 @@ async function boot() {
     elements.apiBaseUrl.value = getDefaultApiBaseUrl();
   }
   resetPosSample();
-  clearFeedback();
+  clearFeedback(true);
   readConfig();
   wireEvents();
-  setActiveTab('ops');
+  setActiveTheme('overview');
   await loadPosBudgetContext();
   syncBudgetFilterDefaults();
   await refreshAll();
