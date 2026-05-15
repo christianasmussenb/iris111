@@ -12,6 +12,8 @@ const state = {
   paceData: null,
   pendingRecommendations: [],
   dashboardRows: [],
+  dashboardDate: '',
+  chartData: null,
   rawPosRows: [],
   budgetRows: [],
   selectedBudgetRowId: '',
@@ -89,6 +91,8 @@ const elements = {
   budgetCount: document.getElementById('budgetCount'),
   budgetList: document.getElementById('budgetList'),
   dashboardContext: document.getElementById('dashboardContext'),
+  chartSummary: document.getElementById('chartSummary'),
+  salesChart: document.getElementById('salesChart'),
   rawPosContext: document.getElementById('rawPosContext'),
   rawPosList: document.getElementById('rawPosList'),
   posForm: document.getElementById('posForm'),
@@ -101,6 +105,11 @@ const elements = {
   posPrice: document.getElementById('posPrice'),
   posResult: document.getElementById('posResult'),
   loadPosSampleBtn: document.getElementById('loadPosSampleBtn'),
+  chartStoreCode: document.getElementById('chartStoreCode'),
+  chartDate: document.getElementById('chartDate'),
+  chartCategoryCode: document.getElementById('chartCategoryCode'),
+  chartInternalSku: document.getElementById('chartInternalSku'),
+  loadSalesChartBtn: document.getElementById('loadSalesChartBtn'),
   feedbackForm: document.getElementById('feedbackForm'),
   feedbackResult: document.getElementById('feedbackResult'),
   recommendationId: document.getElementById('recommendationId'),
@@ -122,6 +131,7 @@ const elements = {
   themeConnectionBtn: document.getElementById('themeConnectionBtn'),
   themeStagesBtn: document.getElementById('themeStagesBtn'),
   themeOpsBtn: document.getElementById('themeOpsBtn'),
+  themeChartBtn: document.getElementById('themeChartBtn'),
   themeRawPosBtn: document.getElementById('themeRawPosBtn'),
   themePosBtn: document.getElementById('themePosBtn'),
   themeBudgetBtn: document.getElementById('themeBudgetBtn'),
@@ -129,6 +139,7 @@ const elements = {
   panelConnection: document.getElementById('panelConnection'),
   panelStages: document.getElementById('panelStages'),
   panelOperations: document.getElementById('panelOperations'),
+  panelChart: document.getElementById('panelChart'),
   panelRawPos: document.getElementById('panelRawPos'),
   panelPos: document.getElementById('panelPos'),
   panelBudget: document.getElementById('panelBudget'),
@@ -151,6 +162,7 @@ function readConfig() {
   if (elements.budgetCategoryCode) {
     elements.budgetCategoryCode.value = state.categoryCode;
   }
+  syncChartFiltersFromSelection();
 }
 
 function normalizeBaseUrl(value) {
@@ -217,6 +229,47 @@ function getSelectedPaceContext() {
   };
 }
 
+function getDashboardPaceContext() {
+  const selectedContext = getSelectedPaceContext();
+  return {
+    paceDate: state.dashboardDate || selectedContext.paceDate,
+    paceHour: selectedContext.paceHour,
+    internalSku: selectedContext.internalSku,
+  };
+}
+
+function getDefaultChartDate() {
+  return state.dashboardDate || state.paceDate || getCurrentUtcDate();
+}
+
+function syncChartFiltersFromSelection() {
+  if (elements.chartStoreCode && !elements.chartStoreCode.value.trim()) {
+    elements.chartStoreCode.value = state.storeCode;
+  }
+
+  if (elements.chartDate && !elements.chartDate.value.trim()) {
+    elements.chartDate.value = getDefaultChartDate();
+  }
+
+  if (elements.chartCategoryCode && !elements.chartCategoryCode.value.trim()) {
+    elements.chartCategoryCode.value = state.categoryCode;
+  }
+
+  if (elements.chartInternalSku && !elements.chartInternalSku.value.trim()) {
+    elements.chartInternalSku.value = state.analysisInternalSku;
+  }
+}
+
+function getChartContext() {
+  syncChartFiltersFromSelection();
+  return {
+    storeCode: elements.chartStoreCode.value.trim() || state.storeCode,
+    chartDate: elements.chartDate.value.trim() || getDefaultChartDate(),
+    categoryCode: elements.chartCategoryCode.value.trim() || state.categoryCode,
+    internalSku: elements.chartInternalSku.value.trim().toUpperCase(),
+  };
+}
+
 async function requestJson(path, options = {}) {
   const headers = { ...(options.headers || {}) };
   const hasBody = Object.prototype.hasOwnProperty.call(options, 'body') && options.body !== undefined && options.body !== null;
@@ -280,6 +333,7 @@ function setActiveTheme(themeName) {
     { button: elements.themeConnectionBtn, panel: elements.panelConnection, name: 'connection' },
     { button: elements.themeStagesBtn, panel: elements.panelStages, name: 'stages' },
     { button: elements.themeOpsBtn, panel: elements.panelOperations, name: 'operations' },
+    { button: elements.themeChartBtn, panel: elements.panelChart, name: 'chart' },
     { button: elements.themeRawPosBtn, panel: elements.panelRawPos, name: 'rawpos' },
     { button: elements.themePosBtn, panel: elements.panelPos, name: 'pos' },
     { button: elements.themeBudgetBtn, panel: elements.panelBudget, name: 'budget' },
@@ -298,6 +352,10 @@ function setActiveTheme(themeName) {
 
   if (themeName === 'rawpos') {
     void loadRawPosEvents();
+  }
+
+  if (themeName === 'chart') {
+    void loadSalesChart();
   }
 
   if (themeName === 'pos') {
@@ -379,7 +437,6 @@ function renderStages() {
       { label: 'Local', value: state.storeCode },
       { label: 'Categoria', value: state.categoryCode },
       { label: 'SKU analisis', value: analysisSku },
-      { label: 'Cadencia', value: paceContext },
       { label: 'Contexto de presupuesto', value: state.posBudgetDate || 'pendiente' },
     ],
   }));
@@ -441,6 +498,21 @@ function formatValue(value, fallback = '--') {
     return fallback;
   }
   return value;
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  })[character]);
+}
+
+function formatCurrency(value) {
+  const numericValue = Number(value || 0);
+  return new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 }).format(Number.isNaN(numericValue) ? 0 : numericValue);
 }
 
 function getCurrentUtcTimestamp() {
@@ -766,6 +838,145 @@ function renderPace(data) {
   renderStages();
 }
 
+function buildChartSvg(points, summary) {
+  const width = 1200;
+  const height = 420;
+  const margin = { top: 28, right: 82, bottom: 56, left: 66 };
+  const plotWidth = width - margin.left - margin.right;
+  const plotHeight = height - margin.top - margin.bottom;
+  const maxUnits = Math.max(1, ...points.flatMap((point) => [Number(point.units) || 0, Number(point.budgetUnits) || 0]));
+  const maxRevenue = Math.max(1, ...points.flatMap((point) => [Number(point.revenue) || 0, Number(point.budgetRevenue) || 0]));
+  const slotWidth = plotWidth / points.length;
+  const barWidth = Math.max(6, slotWidth * 0.52);
+  const unitTicks = [0, 0.25, 0.5, 0.75, 1].map((fraction) => Math.round(maxUnits * fraction));
+  const revenueTicks = [0, 0.25, 0.5, 0.75, 1].map((fraction) => Math.round(maxRevenue * fraction));
+  const revenueLinePoints = [];
+  const budgetRevenueLinePoints = [];
+  const budgetUnitLinePoints = [];
+  const bars = [];
+  const dots = [];
+  const budgetDots = [];
+  const budgetRevenueDots = [];
+  const hourLabels = [];
+
+  points.forEach((point, index) => {
+    const hour = Number(point.hour) || 0;
+    const units = Number(point.units) || 0;
+    const revenue = Number(point.revenue) || 0;
+    const budgetUnits = Number(point.budgetUnits) || 0;
+    const budgetRevenue = Number(point.budgetRevenue) || 0;
+    const centerX = margin.left + (index * slotWidth) + (slotWidth / 2);
+    const unitHeight = maxUnits === 0 ? 0 : (units / maxUnits) * plotHeight;
+    const revenueY = margin.top + plotHeight - ((revenue / maxRevenue) * plotHeight);
+    const budgetUnitY = margin.top + plotHeight - ((budgetUnits / maxUnits) * plotHeight);
+    const budgetRevenueY = margin.top + plotHeight - ((budgetRevenue / maxRevenue) * plotHeight);
+    const barX = centerX - (barWidth / 2);
+    const barY = margin.top + plotHeight - unitHeight;
+    bars.push(`<rect x="${barX.toFixed(2)}" y="${barY.toFixed(2)}" width="${barWidth.toFixed(2)}" height="${unitHeight.toFixed(2)}" rx="8" fill="rgba(123, 224, 195, 0.75)" />`);
+    revenueLinePoints.push(`${centerX.toFixed(2)},${revenueY.toFixed(2)}`);
+    budgetUnitLinePoints.push(`${centerX.toFixed(2)},${budgetUnitY.toFixed(2)}`);
+    budgetRevenueLinePoints.push(`${centerX.toFixed(2)},${budgetRevenueY.toFixed(2)}`);
+    dots.push(`<circle cx="${centerX.toFixed(2)}" cy="${revenueY.toFixed(2)}" r="3.5" fill="rgba(94, 188, 255, 0.95)" stroke="#07101f" stroke-width="2" />`);
+    budgetDots.push(`<circle cx="${centerX.toFixed(2)}" cy="${budgetUnitY.toFixed(2)}" r="2.8" fill="rgba(255, 186, 102, 0.9)" stroke="#07101f" stroke-width="2" />`);
+    budgetRevenueDots.push(`<circle cx="${centerX.toFixed(2)}" cy="${budgetRevenueY.toFixed(2)}" r="2.8" fill="rgba(255, 186, 102, 0.9)" stroke="#07101f" stroke-width="2" />`);
+    hourLabels.push(`<text x="${centerX.toFixed(2)}" y="${height - 18}" text-anchor="middle" fill="#9aa8c7" font-size="11">${String(hour).padStart(2, '0')}</text>`);
+  });
+
+  const unitGridLines = unitTicks.map((tick) => {
+    const y = margin.top + plotHeight - ((tick / maxUnits) * plotHeight);
+    return `
+      <line x1="${margin.left}" y1="${y.toFixed(2)}" x2="${width - margin.right}" y2="${y.toFixed(2)}" stroke="rgba(255,255,255,0.07)" stroke-dasharray="4 5" />
+      <text x="${margin.left - 10}" y="${(y + 4).toFixed(2)}" text-anchor="end" fill="#9aa8c7" font-size="11">${tick}</text>
+    `;
+  }).join('');
+
+  const revenueAxisLabels = revenueTicks.map((tick) => {
+    const y = margin.top + plotHeight - ((tick / maxRevenue) * plotHeight);
+    return `<text x="${width - margin.right + 10}" y="${(y + 4).toFixed(2)}" text-anchor="start" fill="#9aa8c7" font-size="11">${formatCurrency(tick)}</text>`;
+  }).join('');
+
+  return `
+    <div class="sales-chart__meta">
+      <span>${escapeHtml(summary?.context || '')}</span>
+      <span>${escapeHtml(summary?.subtitle || '')}</span>
+    </div>
+    <div class="sales-chart__figure">
+      <svg class="sales-chart__svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Grafico de ventas por hora">
+        <rect x="0" y="0" width="${width}" height="${height}" fill="rgba(7,12,23,0.92)" rx="18" />
+        ${unitGridLines}
+        <line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${margin.top + plotHeight}" stroke="rgba(255,255,255,0.18)" />
+        <line x1="${width - margin.right}" y1="${margin.top}" x2="${width - margin.right}" y2="${margin.top + plotHeight}" stroke="rgba(255,255,255,0.18)" />
+        <line x1="${margin.left}" y1="${margin.top + plotHeight}" x2="${width - margin.right}" y2="${margin.top + plotHeight}" stroke="rgba(255,255,255,0.18)" />
+        ${bars.join('')}
+        <polyline points="${budgetUnitLinePoints.join(' ')}" fill="none" stroke="rgba(255, 186, 102, 0.92)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="7 6" />
+        <polyline points="${revenueLinePoints.join(' ')}" fill="none" stroke="rgba(94, 188, 255, 0.96)" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round" />
+        <polyline points="${budgetRevenueLinePoints.join(' ')}" fill="none" stroke="rgba(255, 186, 102, 0.92)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="7 6" />
+        ${budgetDots.join('')}
+        ${dots.join('')}
+        ${budgetRevenueDots.join('')}
+        ${hourLabels.join('')}
+        ${revenueAxisLabels}
+        <text x="${margin.left}" y="18" fill="#7be0c3" font-size="11" font-weight="700">Unidades</text>
+        <text x="${width - margin.right}" y="18" text-anchor="end" fill="#5ebcff" font-size="11" font-weight="700">Valor</text>
+      </svg>
+    </div>
+    <div class="chart-legend">
+      <span class="chart-legend__item"><span class="chart-legend__swatch chart-legend__swatch--units"></span>Unidades vendidas</span>
+      <span class="chart-legend__item"><span class="chart-legend__swatch chart-legend__swatch--revenue"></span>Valor vendido</span>
+      <span class="chart-legend__item"><span class="chart-legend__swatch chart-legend__swatch--budget"></span>Presupuesto</span>
+    </div>
+  `;
+}
+
+function renderSalesChart(data) {
+  state.chartData = data;
+  const points = Array.isArray(data?.points) ? data.points : [];
+  const summary = data?.summary || {};
+  const contextLabel = [data?.saleDate || getDefaultChartDate(), data?.storeCode || state.storeCode, data?.categoryCode || 'Todas las categorias', data?.internalSku || 'Categoria'].join(' · ');
+
+  if (data?.error || !points.length) {
+    if (elements.chartSummary) {
+      elements.chartSummary.innerHTML = '';
+    }
+    elements.salesChart.classList.add('state-card--empty');
+    elements.salesChart.innerHTML = `<p>${escapeHtml(data?.error ? 'No se pudo cargar el grafico de ventas.' : 'No hay ventas para el contexto seleccionado.')}</p>`;
+    elements.salesChart.dataset.context = contextLabel;
+    return;
+  }
+
+  elements.salesChart.classList.remove('state-card--empty');
+  elements.salesChart.dataset.context = contextLabel;
+  if (elements.chartSummary) {
+    elements.chartSummary.innerHTML = `
+      <div class="chart-summary__item">
+        <span>Contexto</span>
+        <strong>${escapeHtml(contextLabel)}</strong>
+      </div>
+      <div class="chart-summary__item">
+        <span>Unidades totales</span>
+        <strong>${formatValue(summary.totalUnits)}</strong>
+      </div>
+      <div class="chart-summary__item">
+        <span>Valor total</span>
+        <strong>$ ${formatCurrency(summary.totalRevenue)}</strong>
+      </div>
+      <div class="chart-summary__item">
+        <span>Ppto diario</span>
+        <strong>${formatValue(summary.totalBudgetUnits)} u / $ ${formatCurrency(summary.totalBudgetRevenue)}</strong>
+      </div>
+      <div class="chart-summary__item">
+        <span>Pico horario</span>
+        <strong>${String(summary.peakHour ?? 0).padStart(2, '0')}h</strong>
+      </div>
+    `;
+  }
+
+  elements.salesChart.innerHTML = buildChartSvg(points, {
+    context: contextLabel,
+    subtitle: `${formatValue(summary.totalTransactions)} transacciones · ppto ${formatValue(summary.totalBudgetUnits)} u`,
+  });
+}
+
 function renderRecommendations(items) {
   state.pendingRecommendations = Array.isArray(items) ? items : [];
   elements.recommendationsList.innerHTML = '';
@@ -811,9 +1022,11 @@ function renderDashboard(data, paceContext = null) {
   elements.dashboardList.innerHTML = '';
   const items = Array.isArray(data.categories) ? data.categories : [];
   state.dashboardRows = items;
+  state.dashboardDate = paceContext?.paceDate || data?.date || state.dashboardDate || '';
+  syncChartFiltersFromSelection();
   elements.dashboardCount.textContent = String(items.length);
   if (elements.dashboardContext) {
-    const dashboardDateLabel = paceContext?.paceDate || data?.date || 'seleccionada';
+    const dashboardDateLabel = state.dashboardDate || 'seleccionada';
     elements.dashboardContext.textContent = dashboardDateLabel
       ? `Panel calculado para la fecha de cadencia ${dashboardDateLabel}.`
       : 'El panel usara la fecha de cadencia seleccionada.';
@@ -970,7 +1183,7 @@ async function loadPace() {
   try {
     setLoading(elements.paceCard, true);
     elements.paceCard.innerHTML = '<p>Cargando cadencia de ventas...</p>';
-    const paceContext = getSelectedPaceContext();
+    const paceContext = getDashboardPaceContext();
     const paceParams = new URLSearchParams();
     if (paceContext.internalSku) {
       paceParams.set('internalSku', paceContext.internalSku);
@@ -1025,6 +1238,43 @@ async function loadDashboard() {
     elements.dashboardList.innerHTML = `<p>${error.message}</p>`;
   } finally {
     setLoading(elements.dashboardList, false);
+  }
+}
+
+async function loadSalesChart() {
+  readConfig();
+  try {
+    setLoading(elements.salesChart, true);
+    elements.salesChart.classList.add('state-card--empty');
+    elements.salesChart.innerHTML = '<p>Cargando grafico de ventas...</p>';
+    if (elements.chartSummary) {
+      elements.chartSummary.innerHTML = '';
+    }
+
+    const chartContext = getChartContext();
+    const chartParams = new URLSearchParams();
+    if (chartContext.chartDate) {
+      chartParams.set('date', chartContext.chartDate);
+    }
+    if (chartContext.categoryCode) {
+      chartParams.set('categoryCode', chartContext.categoryCode);
+    }
+    if (chartContext.internalSku) {
+      chartParams.set('internalSku', chartContext.internalSku);
+    }
+
+    const chartQuery = chartParams.toString();
+    const chartPath = `/sales/hourly/${encodeURIComponent(chartContext.storeCode)}${chartQuery ? `?${chartQuery}` : ''}`;
+    const data = await requestJson(chartPath);
+    renderSalesChart(data);
+  } catch (error) {
+    elements.salesChart.classList.add('state-card--empty');
+    elements.salesChart.innerHTML = `<p>${escapeHtml(error.message)}</p>`;
+    if (elements.chartSummary) {
+      elements.chartSummary.innerHTML = '';
+    }
+  } finally {
+    setLoading(elements.salesChart, false);
   }
 }
 
@@ -1133,6 +1383,7 @@ function wireEvents() {
   elements.themeConnectionBtn.addEventListener('click', () => setActiveTheme('connection'));
   elements.themeStagesBtn.addEventListener('click', () => setActiveTheme('stages'));
   elements.themeOpsBtn.addEventListener('click', () => setActiveTheme('operations'));
+  elements.themeChartBtn.addEventListener('click', () => setActiveTheme('chart'));
   elements.themeRawPosBtn.addEventListener('click', () => setActiveTheme('rawpos'));
   elements.themePosBtn.addEventListener('click', () => setActiveTheme('pos'));
   elements.themeBudgetBtn.addEventListener('click', () => setActiveTheme('budget'));
@@ -1142,6 +1393,7 @@ function wireEvents() {
   elements.loadPaceBtn.addEventListener('click', loadPace);
   elements.loadPendingBtn.addEventListener('click', loadPendingRecommendations);
   elements.loadDashboardBtn.addEventListener('click', loadDashboard);
+  elements.loadSalesChartBtn.addEventListener('click', loadSalesChart);
   elements.loadRawPosBtn.addEventListener('click', loadRawPosEvents);
   elements.loadBudgetsBtn.addEventListener('click', loadBudgets);
   elements.budgetFilterDate.addEventListener('change', loadBudgets);
@@ -1157,7 +1409,7 @@ function wireEvents() {
 
 async function refreshAll() {
   readConfig();
-  await Promise.all([loadHealth(), loadPace(), loadPendingRecommendations(), loadDashboard(), loadRawPosEvents(), loadBudgets()]);
+  await Promise.all([loadHealth(), loadPace(), loadPendingRecommendations(), loadDashboard(), loadSalesChart(), loadRawPosEvents(), loadBudgets()]);
   renderStages();
 }
 

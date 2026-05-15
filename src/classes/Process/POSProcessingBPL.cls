@@ -27,6 +27,22 @@ ClassMethod PersistBronze(payload As %String, sourceChannel As %String, Output b
 	Quit event.%Save()
 }
 
+ClassMethod NormalizeTimestampValue(tsValue As %String) As %String
+{
+	Set normalized = $ZSTRIP(tsValue, "<>", " ")
+	If normalized = "" Quit $ZDATETIME($HOROLOG, 3, 1)
+
+	If normalized["T" {
+		Set normalized = $Extract(normalized, 1, 10) _ " " _ $Extract(normalized, 12, 19)
+	}
+
+	If $Extract(normalized, $Length(normalized)) = "Z" {
+		Set normalized = $Extract(normalized, 1, $Length(normalized) - 1)
+	}
+
+	Quit normalized
+}
+
 ClassMethod NormalizeSale(payload As %String, bronzeId As %String, Output saleId As %String, Output storeCode As %String, Output categoryCode As %String, Output internalSKU As %String, Output saleDate As %Date, Output saleHour As %Integer, Output quantity As %Integer, Output unitPrice As %Numeric, Output lineTotal As %Numeric) As %Status
 {
 	Set json = ##class(%DynamicObject).%FromJSON(payload)
@@ -40,18 +56,13 @@ ClassMethod NormalizeSale(payload As %String, bronzeId As %String, Output saleId
 	Set unitPrice = +json.%Get("price")
 	Set lineTotal = quantity * unitPrice
 	Set tsValue = json.%Get("timestamp")
-
-	If tsValue'="" {
-		Set saleDate = $ZDATEH($Extract(tsValue, 1, 10), 3)
-		Set saleHour = +$Extract(tsValue, 12, 13)
-	} Else {
-		Set saleDate = $P($HOROLOG, ",", 1)
-		Set saleHour = +$Piece($ZTIME($HOROLOG, 3), ":", 1)
-	}
+	Set normalizedTs = ..NormalizeTimestampValue(tsValue)
+	Set saleDate = $ZDATEH($Extract(normalizedTs, 1, 10), 3)
+	Set saleHour = +$Extract(normalizedTs, 12, 13)
 
 	Set sale = ##class(Silver.Sale).%New()
 	Set sale.SaleId = saleId
-	Set sale.SaleTimestamp = $ZDATETIME($HOROLOG, 3, 1)
+	Set sale.SaleTimestamp = normalizedTs
 	Set sale.StoreCode = storeCode
 	Set sale.InternalSKU = internalSKU
 	Set sale.Qty = quantity

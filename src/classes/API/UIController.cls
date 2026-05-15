@@ -17,6 +17,7 @@ XData UrlMap
 	<Route Url="/pos/ingest" Method="POST" Call="PostPOSIngest" />
 	<Route Url="/pos/raw/:storeCode" Method="GET" Call="GetPosRaw" />
     <Route Url="/stores/:storeCode/categories/:categoryCode/pace" Method="GET" Call="GetPace" />
+	<Route Url="/sales/hourly/:storeCode" Method="GET" Call="GetHourlySales" />
 	<Route Url="/recommendations/pending/:storeCode" Method="GET" Call="GetRecommendationsPending" />
     <Route Url="/recommendations/:recommendationId/feedback" Method="POST" Call="PostFeedback" />
 	<Route Url="/recommendations/:recommendationId/feedback/:decision/:acceptedBy/:notes" Method="POST" Call="PostFeedbackDetails" />
@@ -83,8 +84,7 @@ ClassMethod PostPOSIngest() As %Status
 
 ClassMethod GetBudgetContext(storeCode As %String, categoryCode As %String) As %Status
 {
-	Set internalSKU = $Get(%request.Data("internalSku"))
-	If internalSKU = "" Set internalSKU = $Get(%request.Data("internal_sku"))
+	Set internalSKU = ..GetRequestValue(%request, "internalSku", "internal_sku")
 	Set data = ..BuildBudgetContextData(storeCode, categoryCode, internalSKU)
 	Do ..WriteJson(data)
 	Quit $$$OK
@@ -92,14 +92,10 @@ ClassMethod GetBudgetContext(storeCode As %String, categoryCode As %String) As %
 
 ClassMethod GetBudgets() As %Status
 {
-	Set budgetDate = $Get(%request.Data("budgetDate"))
-	If budgetDate = "" Set budgetDate = $Get(%request.Data("budget_date"))
-	Set storeCode = $Get(%request.Data("storeCode"))
-	If storeCode = "" Set storeCode = $Get(%request.Data("store_code"))
-	Set categoryCode = $Get(%request.Data("categoryCode"))
-	If categoryCode = "" Set categoryCode = $Get(%request.Data("category_code"))
-	Set internalSKU = $Get(%request.Data("internalSku"))
-	If internalSKU = "" Set internalSKU = $Get(%request.Data("internal_sku"))
+	Set budgetDate = ..GetRequestValue(%request, "budgetDate", "budget_date")
+	Set storeCode = ..GetRequestValue(%request, "storeCode", "store_code")
+	Set categoryCode = ..GetRequestValue(%request, "categoryCode", "category_code")
+	Set internalSKU = ..GetRequestValue(%request, "internalSku", "internal_sku")
 	Set data = ..BuildBudgetsData(budgetDate, storeCode, categoryCode, internalSKU)
 	Do ..AuditRequest("MD.SalesBudget", "LIST", "READ_BUDGETS", "", data.%ToJSON())
 	Do ..WriteJson(data)
@@ -240,9 +236,8 @@ ClassMethod BuildPendingRecommendationsData(storeCode As %String) As %DynamicArr
 
 ClassMethod GetDashboard(storeCode As %String) As %Status
 {
-	Set cadenceDate = $Get(%request.Data("paceDate"))
-	If cadenceDate = "" Set cadenceDate = $Get(%request.Data("cadenceDate"))
-	If cadenceDate = "" Set cadenceDate = $Get(%request.Data("date"))
+	Set cadenceDate = ..GetRequestValue(%request, "paceDate", "cadenceDate")
+	If cadenceDate = "" Set cadenceDate = ..GetRequestValue(%request, "date")
 	Do ..NormalizeDateInput(cadenceDate, .cadenceDate)
 	Set data = ..BuildDashboardData(storeCode, cadenceDate)
 	Do ..AuditRequest("Gold.SalesCadence", storeCode, "READ_DASHBOARD", "", data.%ToJSON())
@@ -252,20 +247,29 @@ ClassMethod GetDashboard(storeCode As %String) As %Status
 
 ClassMethod GetPosRaw(storeCode As %String) As %Status
 {
-	Set categoryCode = $Get(%request.Data("categoryCode"))
-	If categoryCode = "" Set categoryCode = $Get(%request.Data("category_code"))
-	Set internalSKU = $Get(%request.Data("internalSku"))
-	If internalSKU = "" Set internalSKU = $Get(%request.Data("internal_sku"))
-	Set paceDate = $Get(%request.Data("paceDate"))
-	If paceDate = "" Set paceDate = $Get(%request.Data("pace_date"))
+	Set categoryCode = ..GetRequestValue(%request, "categoryCode", "category_code")
+	Set internalSKU = ..GetRequestValue(%request, "internalSku", "internal_sku")
+	Set paceDate = ..GetRequestValue(%request, "paceDate", "pace_date")
 	Do ..NormalizeDateInput(paceDate, .paceDate)
-	Set limitRaw = $Get(%request.Data("limit"))
-	If limitRaw = "" Set limitRaw = $Get(%request.Data("maxItems"))
+	Set limitRaw = ..GetRequestValue(%request, "limit", "maxItems")
 	Set limit = +limitRaw
 	If limit < 1 Set limit = 10
 	If limit > 20 Set limit = 20
 	Set data = ..BuildPosRawData(storeCode, categoryCode, internalSKU, paceDate, limit)
 	Do ..AuditRequest("Bronze.POSEvent", storeCode _ $Select(categoryCode'="":"|" _ categoryCode, 1:""), "READ_RAW_POS", "", data.%ToJSON())
+	Do ..WriteJson(data)
+	Quit $$$OK
+}
+
+ClassMethod GetHourlySales(storeCode As %String) As %Status
+{
+	Set saleDate = ..GetRequestValue(%request, "date", "day")
+	If saleDate = "" Set saleDate = ..GetRequestValue(%request, "saleDate")
+	Do ..NormalizeDateInput(saleDate, .saleDate)
+	Set categoryCode = ..GetRequestValue(%request, "categoryCode", "category_code")
+	Set internalSKU = ..GetRequestValue(%request, "internalSku", "internal_sku")
+	Set data = ..BuildHourlySalesData(storeCode, saleDate, categoryCode, internalSKU)
+	Do ..AuditRequest("Silver.Sale", storeCode _ "|" _ $Select(saleDate'="":$ZDATE(saleDate, 3), 1:"") _ "|" _ categoryCode _ "|" _ $Select(internalSKU'="":internalSKU, 1:"__CATEGORY__"), "READ_HOURLY_SALES", "", data.%ToJSON())
 	Do ..WriteJson(data)
 	Quit $$$OK
 }
@@ -319,6 +323,29 @@ ClassMethod ReadRequestBody() As %String
 		Set content = content _ %request.Content.Read(32767)
 	}
 	Quit content
+}
+
+ClassMethod GetRequestValue(request As %CSP.Request, name As %String, fallbackName As %String = "") As %String
+{
+	Set value = ..GetQueryParam(request, name)
+	If value = "", fallbackName'="" Set value = ..GetQueryParam(request, fallbackName)
+	Quit value
+}
+
+ClassMethod GetQueryParam(request As %CSP.Request, name As %String) As %String
+{
+	Set queryString = $Get(request.CgiEnvs("QUERY_STRING"))
+	If queryString = "" Quit ""
+	Set count = $Length(queryString, "&")
+	Set value = ""
+	For index = 1:1:count {
+		Set pair = $Piece(queryString, "&", index)
+		If pair'="" {
+			Set pairName = $Piece(pair, "=", 1)
+			If pairName=name Set value = $Piece(pair, "=", 2, 999)
+		}
+	}
+	Quit value
 }
 
 ClassMethod BuildDashboardData(storeCode As %String, cadenceDate As %String = "") As %DynamicObject
@@ -377,6 +404,100 @@ ClassMethod BuildPosRawData(storeCode As %String, categoryCode As %String = "", 
 		}
 	}
 	Quit items
+}
+
+ClassMethod BuildHourlySalesData(storeCode As %String, saleDate As %Date = "", categoryCode As %String = "", internalSKU As %String = "") As %DynamicObject
+{
+	Set data = ##class(%DynamicObject).%New()
+	Set effectiveDate = $Select(saleDate'="":saleDate, 1:$P($HOROLOG, ",", 1))
+	Set effectiveDateText = $ZDATE(effectiveDate, 3)
+	Set effectiveCategoryCode = $Select(categoryCode'="":categoryCode, 1:"__CATEGORY__")
+	Set normalizedSKU = $Select(internalSKU'="":$ZCONVERT($ZSTRIP(internalSKU, "<>", " "), "U"), 1:"")
+	Set data.storeCode = storeCode
+	Set data.saleDate = effectiveDateText
+	Set data.categoryCode = categoryCode
+	Set data.internalSku = normalizedSKU
+	Set data.points = ##class(%DynamicArray).%New()
+	Set data.summary = ##class(%DynamicObject).%New()
+	Set data.summary.totalUnits = 0
+	Set data.summary.totalRevenue = 0
+	Set data.summary.totalTransactions = 0
+	Set data.summary.maxUnits = 0
+	Set data.summary.maxRevenue = 0
+	Set data.summary.peakHour = 0
+	Set data.summary.peakHourUnits = 0
+	Set data.summary.peakHourRevenue = 0
+	Set data.summary.totalBudgetUnits = ##class(Process.POSProcessingBPL).GetBudgetUnits(effectiveDate, storeCode, effectiveCategoryCode, normalizedSKU)
+	Set data.summary.totalBudgetRevenue = ##class(Process.POSProcessingBPL).GetBudgetRevenue(effectiveDate, storeCode, effectiveCategoryCode, normalizedSKU)
+
+	Set startStamp = effectiveDateText _ " 00:00:00"
+	Set endStamp = $ZDATE(effectiveDate + 1, 3) _ " 00:00:00"
+	Set stmt = ##class(%SQL.Statement).%New()
+	Set sc = stmt.%Prepare("SELECT SaleTimestamp, Qty, Price, CategoryCode, InternalSKU FROM Silver.Sale WHERE StoreCode = ? AND SaleTimestamp >= ? AND SaleTimestamp < ? ORDER BY SaleTimestamp")
+	If $SYSTEM.Status.IsError(sc) {
+		Set data.error = "SALES_QUERY_FAILED"
+		Quit data
+	}
+
+	Set hourUnits = 0
+	Set hourRevenue = 0
+	Set hourTransactions = 0
+	For hour = 0:1:23 {
+		Set hourUnits(hour) = 0
+		Set hourRevenue(hour) = 0
+		Set hourTransactions(hour) = 0
+	}
+
+	Set rs = stmt.%Execute(storeCode, startStamp, endStamp)
+	While rs.%Next() {
+		Set rowCategory = rs.%GetData(4)
+		If categoryCode'="", rowCategory'=categoryCode {
+			Continue
+		}
+		Set rowSKU = $Select(rs.%GetData(5)'="":$ZCONVERT($ZSTRIP(rs.%GetData(5), "<>", " "), "U"), 1:"")
+		If normalizedSKU'="", rowSKU'=normalizedSKU {
+			Continue
+		}
+		Set saleTimestamp = rs.%GetData(1)
+		Set saleHour = +$Extract(saleTimestamp, 12, 13)
+		If saleHour < 0 Continue
+
+		Set units = +rs.%GetData(2)
+		Set revenue = units * (+rs.%GetData(3))
+		Set hourUnits(saleHour) = +hourUnits(saleHour) + units
+		Set hourRevenue(saleHour) = +hourRevenue(saleHour) + revenue
+		Set hourTransactions(saleHour) = +hourTransactions(saleHour) + 1
+		Set data.summary.totalUnits = +data.summary.totalUnits + units
+		Set data.summary.totalRevenue = +data.summary.totalRevenue + revenue
+		Set data.summary.totalTransactions = +data.summary.totalTransactions + 1
+
+		If +hourUnits(saleHour) > +data.summary.maxUnits {
+			Set data.summary.maxUnits = +hourUnits(saleHour)
+			Set data.summary.peakHour = saleHour
+			Set data.summary.peakHourUnits = +hourUnits(saleHour)
+			Set data.summary.peakHourRevenue = +hourRevenue(saleHour)
+		}
+	}
+
+	For hour = 0:1:23 {
+		Set point = ##class(%DynamicObject).%New()
+		Set point.hour = hour
+		Set point.label = $Piece("00,01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21,22,23", ",", hour + 1)
+		Set point.units = +hourUnits(hour)
+		Set point.revenue = +hourRevenue(hour)
+		Set point.transactions = +hourTransactions(hour)
+		Set point.budgetUnits = ##class(Process.POSProcessingBPL).ExpectedBudgetAtHour(data.summary.totalBudgetUnits, hour)
+		Set point.budgetRevenue = ##class(Process.POSProcessingBPL).ExpectedBudgetAtHour(data.summary.totalBudgetRevenue, hour)
+		Do data.points.%Push(point)
+		If +hourUnits(hour) > +data.summary.maxUnits {
+			Set data.summary.maxUnits = +hourUnits(hour)
+			Set data.summary.peakHour = hour
+			Set data.summary.peakHourUnits = +hourUnits(hour)
+			Set data.summary.peakHourRevenue = +hourRevenue(hour)
+		}
+	}
+
+	Quit data
 }
 
 ClassMethod GetRelatedSilverSale(bronzeSourceId As %String) As %DynamicObject

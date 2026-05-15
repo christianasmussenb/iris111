@@ -22,6 +22,7 @@
             <button id="themeConnectionBtn" class="tab-btn" type="button" role="tab" aria-controls="panelConnection" aria-selected="false">Conexion</button>
             <button id="themeStagesBtn" class="tab-btn" type="button" role="tab" aria-controls="panelStages" aria-selected="false">Etapas</button>
             <button id="themeOpsBtn" class="tab-btn" type="button" role="tab" aria-controls="panelOperations" aria-selected="false">Operacion</button>
+            <button id="themeChartBtn" class="tab-btn" type="button" role="tab" aria-controls="panelChart" aria-selected="false">Grafico</button>
             <button id="themeRawPosBtn" class="tab-btn" type="button" role="tab" aria-controls="panelRawPos" aria-selected="false">TRX crudas</button>
             <button id="themePosBtn" class="tab-btn" type="button" role="tab" aria-controls="panelPos" aria-selected="false">POS de prueba</button>
             <button id="themeBudgetBtn" class="tab-btn" type="button" role="tab" aria-controls="panelBudget" aria-selected="false">Presupuesto</button>
@@ -194,6 +195,40 @@
             </form>
             <div id="feedbackResult" class="result-box">Aun no se envio feedback.</div>
           </section>
+        </section>
+
+        <section id="panelChart" class="panel panel--chart theme-panel" role="tabpanel" aria-labelledby="themeChartBtn" hidden>
+          <div class="panel__header panel__header--tabs">
+            <div>
+              <h2>Grafico de ventas por hora</h2>
+              <p class="panel-note">El eje X muestra la hora de venta y el grafico cruza cantidades con valor para el local, dia, categoria y SKU seleccionados.</p>
+            </div>
+            <button id="loadSalesChartBtn" class="button" type="button">Cargar grafico</button>
+          </div>
+
+          <div class="chart-filters">
+            <label class="field">
+              <span>Local</span>
+              <input id="chartStoreCode" type="text" value="GT-0145" />
+            </label>
+            <label class="field">
+              <span>Dia</span>
+              <input id="chartDate" type="date" />
+            </label>
+            <label class="field">
+              <span>Categoria</span>
+              <input id="chartCategoryCode" type="text" value="BEBIDAS" />
+            </label>
+            <label class="field">
+              <span>SKU</span>
+              <input id="chartInternalSku" type="text" placeholder="Opcional" />
+            </label>
+          </div>
+
+          <div id="chartSummary" class="chart-summary"></div>
+          <div id="salesChart" class="sales-chart state-card state-card--empty">
+            <p>El grafico aparecera aqui cuando cargues la vista.</p>
+          </div>
         </section>
 
         <section id="panelPos" class="panel panel--pos theme-panel" role="tabpanel" aria-labelledby="themePosBtn" hidden>
