@@ -16,6 +16,17 @@ Hoy el proyecto cubre el circuito principal de punta a punta:
 
 La prioridad actual dejó de ser “hacer funcionar la ruta básica” y pasó a ser consolidar la experiencia operativa, endurecer contratos, mantener la trazabilidad y cerrar los pendientes de validación de negocio.
 
+## Cierre del sprint actual
+
+Este sprint queda cerrado con una base operativa completa sobre IRIS:
+- el presupuesto entra y se usa como referencia,
+- POS recorre Bronze, Silver y Gold,
+- la consola pública ya expone panel, trx crudas, gráfica y feedback,
+- el batch de reparación quedó reutilizable,
+- y los endpoints críticos ya fueron validados en la ruta real de consumo.
+
+Lo que sigue se toma como trabajo del siguiente sprint, con foco en endurecimiento, validación adicional y refinamiento de negocio.
+
 ## Avance a la fecha
 
 ### Infraestructura y entorno
@@ -76,6 +87,8 @@ El proyecto avanzó cuando las validaciones empezaron a leer el estado persistid
 La corrección del Bronze no podía quedar como un parche manual. Convertirla en servicio batch y script de ejecución dejó una herramienta mantenible para futuras correcciones masivas.
 
 ## Pendientes
+
+Los siguientes puntos no bloquean el cierre del sprint actual; quedan como trabajo del siguiente ciclo.
 
 ### Pendientes funcionales
 - Revisar si la lógica de sostenido necesita una ventana consecutiva más estricta, según criterio de negocio.
