@@ -1,182 +1,110 @@
-# Estado del proyecto e inicio del siguiente sprint
+# Estado actual del proyecto
 
 ## Resumen ejecutivo
 
-El proyecto ya pasó de documentación y scaffold a una base funcional y operativa sobre IRIS.
+IRIS111 ya pasó de una PoC de scaffold a una consola operativa sobre InterSystems IRIS con datos persistidos, trazabilidad y consumo web real.
 
-Hoy existe un flujo mínimo estable para:
-- importar presupuesto diario,
-- ingerir un evento POS,
-- persistir Bronze, Silver y Gold,
-- y validar el recorrido con un smoke test reproducible.
+Hoy el proyecto cubre el circuito principal de punta a punta:
+- importación de presupuesto,
+- ingesta POS,
+- persistencia Bronze, Silver y Gold,
+- panel operativo,
+- vista de trx crudas,
+- gráfica horaria con presupuesto,
+- recomendaciones y feedback,
+- y un batch reutilizable para corregir timestamps y reinyectar eventos cuando hace falta.
 
-Además, ya quedó expuesta una capa de consumo sobre IRIS con consola web pública, endpoints REST y flujo de feedback operativo validado desde navegador.
+La prioridad actual dejó de ser “hacer funcionar la ruta básica” y pasó a ser consolidar la experiencia operativa, endurecer contratos, mantener la trazabilidad y cerrar los pendientes de validación de negocio.
 
-La prioridad inmediata ya no es solo estabilizar la persistencia base. El foco pasa a endurecer la capa de consumo y trazabilidad: feedback consistente, consultas claras y una experiencia operativa que realmente cierre el loop entre detección, decisión y seguimiento.
-
-## Objetivo del proyecto revisado
-
-El objetivo de la PoC no cambió: monitorear el cumplimiento del presupuesto de venta en tiempo casi real y convertir desvíos operativos en acciones concretas para el administrador del local.
-
-Lo que sí cambió es el nivel de madurez alcanzado. Hoy la PoC ya no está solo en una fase de esqueleto técnico; ya demuestra el circuito mínimo de datos, cálculo y decisión sobre IRIS. Por eso el foco siguiente deja de ser la persistencia base y pasa a ser la experiencia operativa completa: reglas más robustas, recomendaciones más ricas y trazabilidad del ciclo de acción.
-
-## Avance logrado
+## Avance a la fecha
 
 ### Infraestructura y entorno
-- El repositorio quedó ordenado con toda la documentación en `DOCS/`.
 - El entorno Docker de IRIS quedó operativo con el contenedor `iris111`.
 - La carga de clases ObjectScript quedó automatizada con `scripts/load_classes.sh`.
-- Se creó un runner real de pruebas en `scripts/run_tests.sh`.
+- Existe un runner de pruebas en `scripts/run_tests.sh`.
+- La documentación del proyecto está centralizada en `DOCS/` y la consola pública vive en `/csp/store-console/`.
 
 ### Modelo e implementación
-- Se creó el scaffold inicial de clases para Bronze, Silver, Gold, maestros, reglas y operaciones.
-- `Service.BudgetImportService` ya importa CSV de presupuesto y deja los valores disponibles para el flujo POS.
-- `Process.POSProcessingBPL` ya procesa el evento POS completo y persiste el resultado en Gold.
-- `Gold.CategoryPace` ya se valida con un smoke end-to-end sobre datos reales.
+- El presupuesto se importa y queda disponible para el recorrido POS.
+- POS ingresa a Bronze y se procesa hacia Silver y Gold.
+- `Silver.Sale` conserva el timestamp del payload normalizado desde la ingesta.
+- `Gold.SalesCadence` trabaja con cadencia por local, categoría, SKU, fecha y hora.
+- La categoría agregada sigue disponible con `__CATEGORY__` para mantener el consolidado operativo.
+- La consola incluye:
+  - panel principal,
+  - vista de trx POS crudas,
+  - gráfica horaria,
+  - y feedback de recomendaciones.
 
-### Validación
-- El smoke test ahora pasa de punta a punta.
-- Se validó este recorrido:
-  - presupuesto importado,
-  - POS procesado,
-  - registro Gold creado,
-  - y conteos confirmados en la base.
-- La consola operativa en `/csp/store-console/` quedó accesible desde IRIS.
-- El flujo de feedback sobre recomendaciones quedó validado desde la UI y por HTTP.
-- La cola de pendientes se limpia correctamente cuando una recomendación ya fue aceptada.
+### Correcciones recientes
+- Se corrigió el timestamp del payload Bronze para que coincida con `ReceivedAt` cuando se ejecuta el batch de reparación.
+- Se implementó `Service.POSReplayBatch` como servicio reutilizable para corregir Bronze y reinyectar Silver/Gold.
+- Se agregó `scripts/replay_pos_batch.sh` como wrapper de ejecución.
+- Se corrigió la sincronización entre la fecha del panel y la fecha usada por la vista de cadencia.
+- Se añadió la vista `Grafico` con filtros de local, fecha, categoría y SKU.
+- La gráfica incluye unidades, valor y presupuesto esperado por hora.
+- Se corrigió el error HTTP del gráfico al alinear la lectura de parámetros de la consola CSP.
 
-## Lecciones aprendidas
+### Validación realizada
+- Compilación de clases validada con `./scripts/load_classes.sh`.
+- Se verificó la respuesta del endpoint de ventas horarias desde la consola CSP.
+- Se verificó la respuesta del endpoint de presupuestos con filtros de fecha, local y categoría.
+- Se validó que la consola pública responde en `/csp/store-console/`.
+- Se comprobó que la vista de gráfica ya recibe categoría y SKU correctamente.
 
-### 1. En ObjectScript compilado conviene evitar accesores SQL frágiles en la ruta crítica
-Durante la implementación apareció un fallo de runtime al leer resultsets SQL desde código compilado. La ruta se estabilizó simplificando la persistencia y evitando esa dependencia en el camino principal.
+## Aprendizajes del sprint
 
-### 2. Las fechas deben normalizarse de forma consistente
-Las clases persistentes y los filtros SQL funcionan mejor cuando las fechas se guardan como fecha lógica de IRIS y no como cadenas ISO mezcladas con lógica de persistencia.
+### 1. La capa de consumo debe validarse en la ruta real del navegador
+La consola funcionaba en código, pero el error real apareció cuando el navegador llamó la ruta CSP con sus propios parámetros. La lección es directa: no alcanza con probar helpers aislados; hay que validar el contrato HTTP que ve la UI.
 
-### 3. Los smoke tests deben validar lo que realmente persiste
-Las primeras aserciones fallaban porque verificaban identificadores generados o campos que no eran los correctos para la persistencia actual. El runner quedó alineado con los campos efectivamente guardados.
+### 2. Los filtros de operación no pueden depender de supuestos implícitos
+La gráfica y la consulta de presupuesto mostraron que un filtro vacío o un nombre de parámetro distinto alcanza para romper la experiencia. Conviene centralizar la lectura de parámetros y definir fallback explícito.
 
-### 4. `iris session` no debe asumirse como fuente confiable de exit code
-Para el runner se optó por validar la salida textual del smoke en lugar de confiar en un código de salida del proceso de sesión.
+### 3. La cadencia operativa necesita dos niveles de contexto
+La operación diaria no se resuelve sólo con la categoría agregada. Hace falta distinguir entre el consolidado de categoría y el detalle por SKU para que el panel, la gráfica y el traceo de POS no se contaminen entre sí.
 
-### 5. Conviene destrabar primero el flujo funcional y refinar después
-La decisión de simplificar la ruta POS/Gold permitió pasar rápidamente a una base verificable. Eso deja ahora una plataforma estable para endurecer la lógica de negocio sin pelear con el entorno.
+### 4. El timestamp de negocio y el timestamp de recepción no son intercambiables
+Cuando Bronze guardaba un timestamp distinto al recibido, el replay y la auditoría quedaban desalineados. Alinear el payload con `ReceivedAt` simplifica la trazabilidad y hace que la reinyectación sea reproducible.
 
-### 6. La prioridad de reglas debe quedar explícita
-Cuando varias reglas pueden aplicar al mismo evento, la resolución no debe depender de orden accidental ni de supuestos implícitos. Centralizar la prioridad en el selector y validarla con smoke tests evita ambigüedades de negocio.
+### 5. El presupuesto sirve como referencia visual, no como sustituto del dato real
+La gráfica mejoró cuando el presupuesto se usó como línea esperada por hora y no como una fuente que mezcla contexto operativo con cálculo visual.
 
-### 7. La recomendación necesita contexto, no solo un código de acción
-Para que la recomendación sea útil en operación real, no basta con registrar la acción. También hace falta guardar severidad, umbral, valor observado, ventana evaluada y estado de ejecución para auditoría y seguimiento.
+### 6. Los smoke tests deben cubrir datos reales y rutas reales
+El proyecto avanzó cuando las validaciones empezaron a leer el estado persistido y los endpoints reales, no sólo a verificar mensajes visuales o helpers internos.
 
-### 8. La ruta de consumo también debe endurecerse
-Al exponer la UI desde CSP aparecieron diferencias entre llamadas directas, query params y rutas con segmentos. La experiencia fue útil para fijar una regla práctica: cuando el navegador y IRIS no leen el mismo contrato de request, conviene mover el dato importante a una ruta explícita y validar el flujo end-to-end en la consola real.
+### 7. Un batch de reparación debe ser reusable
+La corrección del Bronze no podía quedar como un parche manual. Convertirla en servicio batch y script de ejecución dejó una herramienta mantenible para futuras correcciones masivas.
 
-### 9. La UI debe validarse contra el estado persistido, no contra el mensaje visual
-El primer mensaje exitoso de la consola no bastó: había que revisar la fila persistida y la cola de pendientes para confirmar que el ciclo de decisión realmente cambiaba el estado operativo.
+## Pendientes
 
-## Siguiente sprint: prioridad 2
+### Pendientes funcionales
+- Revisar si la lógica de sostenido necesita una ventana consecutiva más estricta, según criterio de negocio.
+- Definir si el negocio quiere múltiples recomendaciones por evento o una sola por prioridad dominante.
+- Confirmar si la gráfica debe ofrecer más métricas derivadas además de unidades, valor y presupuesto.
 
-La prioridad 2 es completar la lógica de negocio para que el sistema no solo persista eventos, sino que también detecte desvíos y genere recomendaciones accionables.
+### Pendientes técnicos
+- Ampliar smoke tests para cubrir la consola pública completa, incluyendo la vista de gráfica y la vista de trx crudas.
+- Consolidar pruebas de contrato para endpoints críticos de la API.
+- Revisar si conviene normalizar más nombres de parámetros entre frontend y backend para reducir riesgo de regresiones.
+- Documentar mejor el flujo de reparación masiva de Bronze en el manual operativo.
 
-### Objetivo del sprint
-Transformar el Gold ya persistido en decisiones operativas automáticas.
+### Pendientes de documentación
+- Actualizar la arquitectura ajustada si se agregan nuevas rutas o nuevas vistas operativas.
+- Mantener sincronizado el README principal con la consola pública y los comandos reales de ejecución.
+- Registrar en la documentación operativa el flujo de replay batch y el criterio para usarlo.
 
-### Alcance técnico
-1. Implementar reglas reales de pace y stockout.
-2. Calcular desvíos con criterios consistentes sobre Gold.
-3. Generar registros en `Ops.Recommendation` cuando una regla dispare.
-4. Mantener auditabilidad del disparo de reglas y sus resultados.
-5. Dejar un smoke test específico para la capa de reglas.
+## Estado resumido
 
-### Entregables esperados
-- `Rules.PaceRules` con lógica real, no solo helpers triviales.
-- `Process.POSProcessingBPL` evaluando reglas con datos persistidos.
-- `Ops.Recommendation` poblada cuando el pace salga fuera de umbral.
-- Un smoke test reproducible para reglas y recomendaciones.
-- Documentación actualizada con el flujo de decisión.
-
-### Orden recomendado de implementación
-1. Completar `CountBelowThreshold` y `CountWithoutSales` con consultas reales.
-2. Ajustar `EvaluateRules` para usar persistencia Gold y crear recomendaciones.
-3. Conectar `ActionSelector` con reglas efectivas y mensajes finales claros.
-4. Validar el flujo con un caso negativo y uno positivo.
-5. Actualizar `scripts/run_tests.sh` para incluir una verificación de recomendaciones.
-
-### Criterio de salida del sprint
-El sprint queda completo cuando un evento POS fuera de pace genera una recomendación persistida y verificable, y el caso sano no dispara acciones.
-
-## Estado resumido actual
-
-- Base de infraestructura: lista.
-- Ingesta presupuesto: lista.
+- Ingesta de presupuesto: lista.
 - Ingesta POS: lista.
-- Persistencia Gold: lista.
-- Smoke tests: lista.
-- Reglas y recomendaciones: listas.
-- API/consumer layer: lista.
-- Consola web operativa: lista.
-- Feedback desde UI: validado.
+- Persistencia Bronze/Silver/Gold: lista.
+- Recomendaciones y feedback: lista.
+- Consola pública: lista.
+- Vista de trx crudas: lista.
+- Gráfica horaria con presupuesto: lista.
+- Replay batch de corrección: lista.
+- Pendientes de endurecimiento y validación adicional: en curso.
 
-## Avance más reciente
+## Cierre
 
-En esta iteración se cerró la capa de consumo operativa:
-
-- `API.UIController` quedó sirviendo health, pace, dashboard, pending recommendations y feedback.
-- La consola está expuesta públicamente en `/csp/store-console/`.
-- El submit de feedback ya actualiza el estado de la recomendación y limpia el backlog de pendientes.
-- La UI muestra el resultado del ciclo con un mensaje de confirmación y refresca la vista.
-
-## Progreso del Sprint 2
-
-Sprint 2 ya arrancó y dejó estas piezas funcionales:
-
-- `Rules.PaceRules` está en uso para identificar desvíos críticos.
-- `Process.POSProcessingBPL` ya calcula desviación negativa compatible con el umbral de reglas.
-- `CountBelowThreshold` y `CountWithoutSales` ya consultan Gold con umbrales separados para crítico y sostenido.
-- `Ops.Recommendation` ya se persiste con metadatos de regla: ventana, umbral, valor observado, prioridad y pace relacionado.
-- `Ops.Recommendation` ya se persiste con metadatos de regla y contexto operativo: severidad, mensaje de negocio y estado de ejecución.
-- `Rules.ActionSelector` expone prioridad de regla explícita además de la acción que corresponde.
-- `scripts/run_tests.sh` ya valida también los casos de recomendaciones críticas, sostenidas y de stockout, incluyendo metadatos, prioridad y un smoke específico de resolución de prioridades, además de budget, POS y Gold.
-
-Siguiente ajuste dentro del sprint:
-
-- refinar la lógica de sostenido para ventanas consecutivas si hace falta acercarla más al negocio,
-- y, más adelante, añadir múltiples recomendaciones por evento si el negocio quiere trazabilidad completa de reglas concurrentes.
-
-## Ajuste completado en esta iteración
-
-- La recomendación ahora guarda `RuleWindowType`, `RuleThreshold`, `RuleObservedValue`, `RulePriority` y `RelatedPaceId`.
-- La recomendación ahora guarda también `RuleSeverity`, `BusinessMessage` y `ExecutionState`.
-- El smoke de reglas confirma tanto el tipo de regla como su prioridad y sus valores de contexto; el smoke de prioridad adicional verifica que la regla sostenida prevalece cuando sostenido y stockout aplican al mismo evento.
-- La prioridad de regla quedó centralizada en `Rules.ActionSelector.GetPriority`.
-
-## Cierre de esta iteración
-
-Los dos puntos pedidos quedaron implementados y validados:
-
-- Smoke de prioridad múltiple: listo.
-- Recomendación enriquecida con contexto operativo: lista.
-
-## Siguiente sprint propuesto
-
-El siguiente sprint debería consolidar la capa de consumo y dejarla lista para uso continuo por parte del usuario operativo.
-
-### Objetivo del sprint
-Hacer que la consola y la API se comporten como un producto operativo confiable: lectura clara, feedback consistente, trazabilidad completa y experiencia usable tanto desde navegador como desde integración externa.
-
-### Alcance técnico recomendado
-1. Endurecer la API de consumo para que los contratos de `health`, `pace`, `dashboard`, `pending` y `feedback` sean estables y fáciles de integrar.
-2. Consolidar el flujo de feedback con validaciones de entrada, mensajes de error más explícitos y comportamiento homogéneo en navegador y HTTP.
-3. Mejorar la consola web para que el operador vea mejor el estado real del ciclo: recomendación cargada, decisión tomada, estado persistido y backlog actualizado.
-4. Añadir más trazabilidad operativa en `Ops.AuditLog` para consultas y cambios de estado relevantes.
-5. Dejar smoke tests y pruebas de consola que cubran la ruta feliz completa y al menos un caso de error por endpoint crítico.
-
-### Entregables esperados
-- API de consulta estable para pace, dashboard y recomendaciones.
-- Feedback operativo consistente desde consola y desde HTTP.
-- Auditoría de consumo y cambios de estado.
-- Smoke de API y UI que cubra el ciclo de decisión completo.
-- Documentación operativa actualizada para la consola pública.
-
-### Criterio de salida del siguiente sprint
-El sprint queda completo cuando el sistema permite consultar el estado operativo, responder recomendaciones y ver el backlog actualizado desde la UI pública o por API, sin depender de intervención manual en la base.
+La PoC ya demuestra el circuito operativo central. Lo que sigue no es rearmar la base, sino consolidar calidad: validar más contratos, afinar reglas de negocio y mantener la trazabilidad clara para operación y soporte.
