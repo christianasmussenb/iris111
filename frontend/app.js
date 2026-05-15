@@ -2,6 +2,7 @@ const state = {
   apiBaseUrl: getDefaultApiBaseUrl(),
   storeCode: 'GT-0145',
   categoryCode: 'BEBIDAS',
+  analysisInternalSku: '',
   healthStatus: '--',
   paceData: null,
   pendingRecommendations: [],
@@ -54,6 +55,7 @@ const elements = {
   apiBaseUrl: document.getElementById('apiBaseUrl'),
   storeCode: document.getElementById('storeCode'),
   categoryCode: document.getElementById('categoryCode'),
+  analysisInternalSku: document.getElementById('analysisInternalSku'),
   healthStatus: document.getElementById('healthStatus'),
   storeLabel: document.getElementById('storeLabel'),
   categoryLabel: document.getElementById('categoryLabel'),
@@ -122,6 +124,7 @@ function readConfig() {
   state.apiBaseUrl = normalizeBaseUrl(elements.apiBaseUrl.value.trim() || getDefaultApiBaseUrl());
   state.storeCode = elements.storeCode.value.trim() || 'GT-0145';
   state.categoryCode = elements.categoryCode.value.trim() || 'BEBIDAS';
+  state.analysisInternalSku = elements.analysisInternalSku.value.trim();
   elements.storeLabel.textContent = state.storeCode;
   elements.categoryLabel.textContent = state.categoryCode;
   renderStages();
@@ -259,6 +262,7 @@ function renderStages() {
   const pace = state.paceData || {};
   const recCount = state.pendingRecommendations.length;
   const dashboardCount = state.dashboardRows.length;
+  const analysisSku = state.analysisInternalSku || 'categoria';
   const paceTone = pace?.error === 'PACE_NOT_FOUND'
     ? 'warn'
     : Number(pace?.pctPaceUnits) >= 100
@@ -289,6 +293,7 @@ function renderStages() {
     metrics: [
       { label: 'Local', value: state.storeCode },
       { label: 'Categoria', value: state.categoryCode },
+      { label: 'SKU analisis', value: analysisSku },
       { label: 'Contexto de presupuesto', value: state.posBudgetDate || 'pendiente' },
     ],
   }));
@@ -411,7 +416,13 @@ function syncBudgetFilterDefaults() {
 async function loadPosBudgetContext() {
   readConfig();
   try {
-    const data = await requestJson(`/budget/context/${encodeURIComponent(state.storeCode)}/${encodeURIComponent(state.categoryCode)}`);
+    const contextParams = new URLSearchParams();
+    if (state.analysisInternalSku) {
+      contextParams.set('internalSku', state.analysisInternalSku);
+    }
+    const contextQuery = contextParams.toString();
+    const contextPath = `/budget/context/${encodeURIComponent(state.storeCode)}/${encodeURIComponent(state.categoryCode)}${contextQuery ? `?${contextQuery}` : ''}`;
+    const data = await requestJson(contextPath);
     if (data?.budgetDate) {
       state.posBudgetDate = data.budgetDate;
       elements.posResult.textContent = `Contexto de presupuesto cargado para ${data.budgetDate}.`;
@@ -753,7 +764,13 @@ async function loadPace() {
   try {
     setLoading(elements.paceCard, true);
     elements.paceCard.innerHTML = '<p>Cargando cadencia de ventas...</p>';
-    const data = await requestJson(`/stores/${encodeURIComponent(state.storeCode)}/categories/${encodeURIComponent(state.categoryCode)}/pace`);
+    const paceParams = new URLSearchParams();
+    if (state.analysisInternalSku) {
+      paceParams.set('internalSku', state.analysisInternalSku);
+    }
+    const paceQuery = paceParams.toString();
+    const pacePath = `/stores/${encodeURIComponent(state.storeCode)}/categories/${encodeURIComponent(state.categoryCode)}/pace${paceQuery ? `?${paceQuery}` : ''}`;
+    const data = await requestJson(pacePath);
     renderPace(data);
   } catch (error) {
     elements.paceCard.innerHTML = `<p>${error.message}</p>`;
@@ -862,6 +879,7 @@ function wireEvents() {
   elements.apiBaseUrl.addEventListener('change', readConfig);
   elements.storeCode.addEventListener('change', () => { readConfig(); void loadPosBudgetContext(); });
   elements.categoryCode.addEventListener('change', () => { readConfig(); void loadPosBudgetContext(); });
+  elements.analysisInternalSku.addEventListener('change', () => { readConfig(); void loadPosBudgetContext(); });
   elements.refreshAllBtn.addEventListener('click', refreshAll);
   elements.themeOverviewBtn.addEventListener('click', () => setActiveTheme('overview'));
   elements.themeConnectionBtn.addEventListener('click', () => setActiveTheme('connection'));

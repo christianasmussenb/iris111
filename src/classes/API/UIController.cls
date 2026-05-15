@@ -82,7 +82,9 @@ ClassMethod PostPOSIngest() As %Status
 
 ClassMethod GetBudgetContext(storeCode As %String, categoryCode As %String) As %Status
 {
-	Set data = ..BuildBudgetContextData(storeCode, categoryCode)
+	Set internalSKU = $Get(%request.Data("internalSku"))
+	If internalSKU = "" Set internalSKU = $Get(%request.Data("internal_sku"))
+	Set data = ..BuildBudgetContextData(storeCode, categoryCode, internalSKU)
 	Do ..WriteJson(data)
 	Quit $$$OK
 }
@@ -149,39 +151,51 @@ ClassMethod BuildHealthData() As %DynamicObject
 
 ClassMethod GetPace(storeCode As %String, categoryCode As %String) As %Status
 {
-	Set data = ..BuildPaceData(storeCode, categoryCode)
-	Do ..AuditRequest("Gold.CategoryPace", storeCode _ "|" _ categoryCode, "READ_PACE", "", data.%ToJSON())
+	Set internalSKU = $Get(%request.Data("internalSku"))
+	If internalSKU = "" Set internalSKU = $Get(%request.Data("internal_sku"))
+	Set paceDate = $Get(%request.Data("paceDate"))
+	If paceDate = "" Set paceDate = $Get(%request.Data("pace_date"))
+	Set paceHourRaw = $Get(%request.Data("paceHour"))
+	If paceHourRaw = "" Set paceHourRaw = $Get(%request.Data("pace_hour"))
+	Set paceHour = +paceHourRaw
+	If paceHourRaw = "" Set paceHour = -1
+	Set data = ..BuildPaceData(storeCode, categoryCode, internalSKU, paceDate, paceHour)
+	Do ..AuditRequest("Gold.SalesCadence", storeCode _ "|" _ categoryCode _ "|" _ $Select(internalSKU'="":internalSKU, 1:"__CATEGORY__"), "READ_PACE", "", data.%ToJSON())
 	Do ..WriteJson(data)
 	Quit $$$OK
 }
 
-ClassMethod BuildPaceData(storeCode As %String, categoryCode As %String, paceDate As %Date = "", paceHour As %Integer = -1) As %DynamicObject
+ClassMethod BuildPaceData(storeCode As %String, categoryCode As %String, internalSKU As %String = "", paceDate As %Date = "", paceHour As %Integer = -1) As %DynamicObject
 {
 	Set data = ##class(%DynamicObject).%New()
 	Set queryDate = $Select(paceDate'="":paceDate, 1:$P($HOROLOG, ",", 1))
 	Set queryHour = $Select(paceHour>-1:paceHour, 1:+$Piece($ZTIME($HOROLOG, 3), ":", 1))
+	Set querySKU = $Select(internalSKU'="":internalSKU, 1:"__CATEGORY__")
 
 	Set stmt = ##class(%SQL.Statement).%New()
-	Set sc = stmt.%Prepare("SELECT PaceId, PaceDate, PaceHour, StoreCode, CategoryCode, UnitsSold, RevenueSold, UnitsBudget, RevenueBudget, UnitsCumulative, RevenueCumulative, PctPaceUnits, PctPaceRevenue, VarianceUnits, VarianceRevenue, LastUpdated FROM Gold.CategoryPace WHERE PaceDate = ? AND PaceHour = ? AND StoreCode = ? AND CategoryCode = ?")
+	Set sc = stmt.%Prepare("SELECT CadenceId, CadenceDate, CadenceHour, StoreCode, CategoryCode, InternalSKU, UnitsSold, RevenueSold, UnitsBudget, RevenueBudget, UnitsCumulative, RevenueCumulative, VarianceUnits, VarianceRevenue, LastUpdated FROM Gold.SalesCadence WHERE CadenceDate = ? AND CadenceHour <= ? AND StoreCode = ? AND CategoryCode = ? AND InternalSKU = ? ORDER BY CadenceHour DESC")
 	If $SYSTEM.Status.IsError(sc) Quit data
-	Set rs = stmt.%Execute(queryDate, queryHour, storeCode, categoryCode)
+	Set rs = stmt.%Execute(queryDate, queryHour, storeCode, categoryCode, querySKU)
 	If rs.%Next() {
 		Set data.paceId = rs.%GetData(1)
 		Set data.paceDate = rs.%GetData(2)
 		Set data.paceHour = rs.%GetData(3)
 		Set data.storeCode = rs.%GetData(4)
 		Set data.categoryCode = rs.%GetData(5)
-		Set data.unitsSold = rs.%GetData(6)
-		Set data.revenueSold = rs.%GetData(7)
-		Set data.unitsBudget = rs.%GetData(8)
-		Set data.revenueBudget = rs.%GetData(9)
-		Set data.unitsCumulative = rs.%GetData(10)
-		Set data.revenueCumulative = rs.%GetData(11)
-		Set data.pctPaceUnits = rs.%GetData(12)
-		Set data.pctPaceRevenue = rs.%GetData(13)
-		Set data.varianceUnits = rs.%GetData(14)
-		Set data.varianceRevenue = rs.%GetData(15)
-		Set data.lastUpdated = rs.%GetData(16)
+		Set data.internalSku = $Select(rs.%GetData(6) = "__CATEGORY__":"", 1:rs.%GetData(6))
+		Set data.unitsSold = rs.%GetData(7)
+		Set data.revenueSold = rs.%GetData(8)
+		Set data.unitsBudget = rs.%GetData(9)
+		Set data.revenueBudget = rs.%GetData(10)
+		Set data.unitsCumulative = rs.%GetData(11)
+		Set data.revenueCumulative = rs.%GetData(12)
+		Set data.pctPaceUnits = ..PercentOf(rs.%GetData(11), rs.%GetData(9))
+		Set data.pctPaceRevenue = ..PercentOf(rs.%GetData(12), rs.%GetData(10))
+		Set data.varianceUnits = rs.%GetData(13)
+		Set data.varianceRevenue = rs.%GetData(14)
+		Set data.lastUpdated = rs.%GetData(15)
+	} ElseIf internalSKU'="" {
+		Set data = ..BuildPaceData(storeCode, categoryCode, "", paceDate, paceHour)
 	} Else {
 		Set data.error = "PACE_NOT_FOUND"
 	}
@@ -212,7 +226,7 @@ ClassMethod BuildPendingRecommendationsData(storeCode As %String) As %DynamicArr
 ClassMethod GetDashboard(storeCode As %String) As %Status
 {
 	Set data = ..BuildDashboardData(storeCode)
-	Do ..AuditRequest("Gold.CategoryPace", storeCode, "READ_DASHBOARD", "", data.%ToJSON())
+	Do ..AuditRequest("Gold.SalesCadence", storeCode, "READ_DASHBOARD", "", data.%ToJSON())
 	Do ..WriteJson(data)
 	Quit $$$OK
 }
@@ -275,7 +289,7 @@ ClassMethod BuildDashboardData(storeCode As %String) As %DynamicObject
 	Set data.date = $P($HOROLOG, ",", 1)
 	Set data.categories = ##class(%DynamicArray).%New()
 	Set stmt = ##class(%SQL.Statement).%New()
-	Set sc = stmt.%Prepare("SELECT PaceId, PaceDate, PaceHour, StoreCode, CategoryCode, UnitsSold, RevenueSold, UnitsBudget, RevenueBudget, UnitsCumulative, RevenueCumulative, PctPaceUnits, PctPaceRevenue, VarianceUnits, VarianceRevenue, LastUpdated FROM Gold.CategoryPace WHERE PaceDate = ? AND StoreCode = ? ORDER BY CategoryCode, PaceHour")
+	Set sc = stmt.%Prepare("SELECT CadenceId, CadenceDate, CadenceHour, StoreCode, CategoryCode, InternalSKU, UnitsSold, RevenueSold, UnitsBudget, RevenueBudget, UnitsCumulative, RevenueCumulative, VarianceUnits, VarianceRevenue, LastUpdated FROM Gold.SalesCadence WHERE CadenceDate = ? AND StoreCode = ? AND InternalSKU = '__CATEGORY__' ORDER BY CategoryCode, CadenceHour")
 	If $SYSTEM.Status.IsError(sc) Quit data
 	Set rs = stmt.%Execute(data.date, storeCode)
 	While rs.%Next() {
@@ -284,17 +298,30 @@ ClassMethod BuildDashboardData(storeCode As %String) As %DynamicObject
 	Quit data
 }
 
-ClassMethod BuildBudgetContextData(storeCode As %String, categoryCode As %String) As %DynamicObject
+ClassMethod BuildBudgetContextData(storeCode As %String, categoryCode As %String, internalSKU As %String = "") As %DynamicObject
 {
 	Set data = ##class(%DynamicObject).%New()
 	Set data.storeCode = storeCode
 	Set data.categoryCode = categoryCode
+	Set data.internalSku = internalSKU
 	Set data.timestamp = $ZDATETIME($HOROLOG, 3, 1)
 	Set data.budgetDate = ""
 	Set data.targetUnits = 0
 	Set data.targetRevenue = 0
 
 	Set stmt = ##class(%SQL.Statement).%New()
+	If internalSKU'="" {
+		Set sc = stmt.%Prepare("SELECT BudgetDate, TargetUnits, TargetRevenue FROM MD.SalesBudget WHERE StoreCode = ? AND CategoryCode = ? AND InternalSKU = ? ORDER BY BudgetDate DESC")
+		If '$SYSTEM.Status.IsError(sc) {
+			Set rs = stmt.%Execute(storeCode, categoryCode, internalSKU)
+			If rs.%Next() {
+				Set data.budgetDate = $ZDATE(rs.%GetData(1), 3)
+				Set data.targetUnits = rs.%GetData(2)
+				Set data.targetRevenue = rs.%GetData(3)
+				Quit data
+			}
+		}
+	}
 	Set sc = stmt.%Prepare("SELECT BudgetDate, TargetUnits, TargetRevenue FROM MD.SalesBudget WHERE StoreCode = ? AND CategoryCode = ? AND (InternalSKU IS NULL OR InternalSKU = '') ORDER BY BudgetDate DESC")
 	If $SYSTEM.Status.IsError(sc) Quit data
 	Set rs = stmt.%Execute(storeCode, categoryCode)
@@ -304,6 +331,12 @@ ClassMethod BuildBudgetContextData(storeCode As %String, categoryCode As %String
 		Set data.targetRevenue = rs.%GetData(3)
 	}
 	Quit data
+}
+
+ClassMethod PercentOf(actual As %Numeric, budget As %Numeric) As %Numeric
+{
+	If budget = 0 Quit 0
+	Quit (actual / budget) * 100
 }
 
 ClassMethod BuildBudgetsData(budgetDate As %String = "", storeCode As %String = "", categoryCode As %String = "", internalSKU As %String = "") As %DynamicArray
@@ -577,17 +610,18 @@ ClassMethod PaceRowToObject(row As %SQL.StatementResult) As %DynamicObject
 	Set data.PaceHour = row.%GetData(3)
 	Set data.StoreCode = row.%GetData(4)
 	Set data.CategoryCode = row.%GetData(5)
-	Set data.UnitsSold = row.%GetData(6)
-	Set data.RevenueSold = row.%GetData(7)
-	Set data.UnitsBudget = row.%GetData(8)
-	Set data.RevenueBudget = row.%GetData(9)
-	Set data.UnitsCumulative = row.%GetData(10)
-	Set data.RevenueCumulative = row.%GetData(11)
-	Set data.PctPaceUnits = row.%GetData(12)
-	Set data.PctPaceRevenue = row.%GetData(13)
-	Set data.VarianceUnits = row.%GetData(14)
-	Set data.VarianceRevenue = row.%GetData(15)
-	Set data.LastUpdated = row.%GetData(16)
+	Set data.InternalSKU = $Select(row.%GetData(6) = "__CATEGORY__":"", 1:row.%GetData(6))
+	Set data.UnitsSold = row.%GetData(7)
+	Set data.RevenueSold = row.%GetData(8)
+	Set data.UnitsBudget = row.%GetData(9)
+	Set data.RevenueBudget = row.%GetData(10)
+	Set data.UnitsCumulative = row.%GetData(11)
+	Set data.RevenueCumulative = row.%GetData(12)
+	Set data.PctPaceUnits = ..PercentOf(row.%GetData(11), row.%GetData(9))
+	Set data.PctPaceRevenue = ..PercentOf(row.%GetData(12), row.%GetData(10))
+	Set data.VarianceUnits = row.%GetData(13)
+	Set data.VarianceRevenue = row.%GetData(14)
+	Set data.LastUpdated = row.%GetData(15)
 	Quit data
 }
 

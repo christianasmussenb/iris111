@@ -6,13 +6,13 @@ ClassMethod HandlePayload(payload As %String, sourceChannel As %String = "REST")
 	Set status = ..PersistBronze(payload, sourceChannel, .bronzeId)
 	If $SYSTEM.Status.IsError(status) Quit status
 
-	Set status = ..NormalizeSale(payload, bronzeId, .saleId, .storeCode, .categoryCode, .saleDate, .saleHour, .quantity, .unitPrice, .lineTotal)
+	Set status = ..NormalizeSale(payload, bronzeId, .saleId, .storeCode, .categoryCode, .internalSKU, .saleDate, .saleHour, .quantity, .unitPrice, .lineTotal)
 	If $SYSTEM.Status.IsError(status) Quit status
 
-	Set status = ..UpdateGold(storeCode, categoryCode, saleDate, saleHour, quantity, lineTotal, .paceId, .unitsBudget, .revenueBudget, .unitsCumulative, .revenueCumulative, .varianceUnits)
+	Set status = ..UpdateCadence(storeCode, categoryCode, internalSKU, saleDate, saleHour, quantity, lineTotal, .paceId, .unitsBudget, .revenueBudget, .unitsCumulative, .revenueCumulative, .varianceUnits)
 	If $SYSTEM.Status.IsError(status) Quit status
 
-	Set status = ..EvaluateRules(storeCode, categoryCode, saleDate, paceId, unitsBudget, revenueBudget, unitsCumulative, revenueCumulative, varianceUnits, .recommendationId)
+	Set status = ..EvaluateRules(storeCode, categoryCode, saleDate, saleHour, paceId, unitsBudget, revenueBudget, unitsCumulative, revenueCumulative, varianceUnits, .recommendationId)
 	Quit status
 }
 
@@ -27,7 +27,7 @@ ClassMethod PersistBronze(payload As %String, sourceChannel As %String, Output b
 	Quit event.%Save()
 }
 
-ClassMethod NormalizeSale(payload As %String, bronzeId As %String, Output saleId As %String, Output storeCode As %String, Output categoryCode As %String, Output saleDate As %Date, Output saleHour As %Integer, Output quantity As %Integer, Output unitPrice As %Numeric, Output lineTotal As %Numeric) As %Status
+ClassMethod NormalizeSale(payload As %String, bronzeId As %String, Output saleId As %String, Output storeCode As %String, Output categoryCode As %String, Output internalSKU As %String, Output saleDate As %Date, Output saleHour As %Integer, Output quantity As %Integer, Output unitPrice As %Numeric, Output lineTotal As %Numeric) As %Status
 {
 	Set json = ##class(%DynamicObject).%FromJSON(payload)
 	If '$IsObject(json) Quit $SYSTEM.Status.Error(5001, "Invalid POS payload JSON")
@@ -35,6 +35,7 @@ ClassMethod NormalizeSale(payload As %String, bronzeId As %String, Output saleId
 	Set saleId = bronzeId _ "-SALE"
 	Set storeCode = json.%Get("store_code")
 	Set categoryCode = json.%Get("category_code")
+	Set internalSKU = json.%Get("internal_sku")
 	Set quantity = +json.%Get("qty")
 	Set unitPrice = +json.%Get("price")
 	Set lineTotal = quantity * unitPrice
@@ -52,7 +53,7 @@ ClassMethod NormalizeSale(payload As %String, bronzeId As %String, Output saleId
 	Set sale.SaleId = saleId
 	Set sale.SaleTimestamp = $ZDATETIME($HOROLOG, 3, 1)
 	Set sale.StoreCode = storeCode
-	Set sale.InternalSKU = json.%Get("internal_sku")
+	Set sale.InternalSKU = internalSKU
 	Set sale.Qty = quantity
 	Set sale.Price = unitPrice
 	Set sale.CategoryCode = categoryCode
@@ -60,86 +61,103 @@ ClassMethod NormalizeSale(payload As %String, bronzeId As %String, Output saleId
 	Quit sale.%Save()
 }
 
-ClassMethod UpdateGold(storeCode As %String, categoryCode As %String, saleDate As %Date, saleHour As %Integer, quantity As %Integer, lineTotal As %Numeric, Output paceId As %String, Output unitsBudget As %Integer, Output revenueBudget As %Numeric, Output unitsCumulative As %Integer, Output revenueCumulative As %Numeric, Output varianceUnits As %Numeric) As %Status
+ClassMethod UpdateCadence(storeCode As %String, categoryCode As %String, internalSKU As %String, saleDate As %Date, saleHour As %Integer, quantity As %Integer, lineTotal As %Numeric, Output paceId As %String, Output unitsBudget As %Integer, Output revenueBudget As %Numeric, Output unitsCumulative As %Integer, Output revenueCumulative As %Numeric, Output varianceUnits As %Numeric) As %Status
 {
-	Set paceId = ..BuildPaceId(storeCode, categoryCode, saleDate, saleHour)
-	Set unitsBudget = ..GetBudgetUnits(saleDate, storeCode, categoryCode)
-	Set revenueBudget = ..GetBudgetRevenue(saleDate, storeCode, categoryCode)
+	Set status = ..SaveCadenceRow(storeCode, categoryCode, "__CATEGORY__", saleDate, saleHour, quantity, lineTotal, .paceId, .unitsBudget, .revenueBudget, .unitsCumulative, .revenueCumulative, .varianceUnits)
+	If $SYSTEM.Status.IsError(status) Quit status
+
+	If internalSKU'="" {
+		Set status = ..SaveCadenceRow(storeCode, categoryCode, internalSKU, saleDate, saleHour, quantity, lineTotal, .skuCadenceId, .skuUnitsBudget, .skuRevenueBudget, .skuUnitsCumulative, .skuRevenueCumulative, .skuVarianceUnits)
+		If $SYSTEM.Status.IsError(status) Quit status
+	}
+
+	Quit $$$OK
+}
+
+ClassMethod SaveCadenceRow(storeCode As %String, categoryCode As %String, internalSKU As %String, saleDate As %Date, saleHour As %Integer, quantity As %Integer, lineTotal As %Numeric, Output cadenceId As %String, Output unitsBudget As %Numeric, Output revenueBudget As %Numeric, Output unitsCumulative As %Numeric, Output revenueCumulative As %Numeric, Output varianceUnits As %Numeric) As %Status
+{
+	Set cadenceId = ..BuildCadenceId(storeCode, categoryCode, internalSKU, saleDate, saleHour)
+	Set dailyUnitsBudget = ..GetBudgetUnits(saleDate, storeCode, categoryCode, internalSKU)
+	Set dailyRevenueBudget = ..GetBudgetRevenue(saleDate, storeCode, categoryCode, internalSKU)
+	Set unitsBudget = ..ExpectedBudgetAtHour(dailyUnitsBudget, saleHour)
+	Set revenueBudget = ..ExpectedBudgetAtHour(dailyRevenueBudget, saleHour)
+
 	Set stmt = ##class(%SQL.Statement).%New()
-	Set sc = stmt.%Prepare("SELECT %ID, UnitsCumulative, RevenueCumulative, UnitsSold, RevenueSold FROM Gold.CategoryPace WHERE PaceId = ?")
+	Set sc = stmt.%Prepare("SELECT %ID, UnitsSold, RevenueSold FROM Gold.SalesCadence WHERE CadenceId = ?")
 	If $SYSTEM.Status.IsError(sc) Quit sc
-	Set rs = stmt.%Execute(paceId)
-	Set existingPace = 0
+	Set rs = stmt.%Execute(cadenceId)
+	Set existingCadence = 0
+	Set currentHourUnits = quantity
+	Set currentHourRevenue = lineTotal
 	If rs.%Next() {
-		Set existingPace = ##class(Gold.CategoryPace).%OpenId(rs.%GetData(1))
+		Set existingCadence = ##class(Gold.SalesCadence).%OpenId(rs.%GetData(1))
+		Set currentHourUnits = +existingCadence.UnitsSold + quantity
+		Set currentHourRevenue = +existingCadence.RevenueSold + lineTotal
 	}
 
-	If $IsObject(existingPace) {
-		Set unitsCumulative = +existingPace.UnitsCumulative + quantity
-		Set revenueCumulative = +existingPace.RevenueCumulative + lineTotal
-		Set unitsSold = +existingPace.UnitsSold + quantity
-		Set revenueSold = +existingPace.RevenueSold + lineTotal
-		Set pace = existingPace
-	} Else {
-		Set unitsCumulative = quantity
-		Set revenueCumulative = lineTotal
-		Set unitsSold = quantity
-		Set revenueSold = lineTotal
-		Set pace = ##class(Gold.CategoryPace).%New()
+	Set priorUnits = 0
+	Set priorRevenue = 0
+	Set stmt = ##class(%SQL.Statement).%New()
+	Set sc = stmt.%Prepare("SELECT UnitsCumulative, RevenueCumulative FROM Gold.SalesCadence WHERE CadenceDate = ? AND CadenceHour < ? AND StoreCode = ? AND CategoryCode = ? AND InternalSKU = ? ORDER BY CadenceHour DESC")
+	If $SYSTEM.Status.IsError(sc) Quit sc
+	Set rs = stmt.%Execute(saleDate, saleHour, storeCode, categoryCode, internalSKU)
+	If rs.%Next() {
+		Set priorUnits = +rs.%GetData(1)
+		Set priorRevenue = +rs.%GetData(2)
 	}
 
-	Set pctPaceUnits = ..CalculatePct(unitsCumulative, unitsBudget)
-	Set pctPaceRevenue = ..CalculatePct(revenueCumulative, revenueBudget)
+	Set unitsCumulative = priorUnits + currentHourUnits
+	Set revenueCumulative = priorRevenue + currentHourRevenue
 	Set varianceUnits = unitsCumulative - unitsBudget
 	Set varianceRevenue = revenueCumulative - revenueBudget
 	Set lastUpdated = $ZDATETIME($HOROLOG, 3, 1)
 
-	Set pace.PaceId = paceId
-	Set pace.PaceDate = saleDate
-	Set pace.PaceHour = saleHour
-	Set pace.StoreCode = storeCode
-	Set pace.CategoryCode = categoryCode
-	Set pace.UnitsSold = unitsSold
-	Set pace.RevenueSold = revenueSold
-	Set pace.UnitsBudget = unitsBudget
-	Set pace.RevenueBudget = revenueBudget
-	Set pace.UnitsCumulative = unitsCumulative
-	Set pace.RevenueCumulative = revenueCumulative
-	Set pace.PctPaceUnits = pctPaceUnits
-	Set pace.PctPaceRevenue = pctPaceRevenue
-	Set pace.VarianceUnits = varianceUnits
-	Set pace.VarianceRevenue = varianceRevenue
-	Set pace.LastUpdated = lastUpdated
-	Quit pace.%Save()
+	Set cadence = $Select($IsObject(existingCadence):existingCadence, 1:##class(Gold.SalesCadence).%New())
+	Set cadence.CadenceId = cadenceId
+	Set cadence.CadenceDate = saleDate
+	Set cadence.CadenceHour = saleHour
+	Set cadence.StoreCode = storeCode
+	Set cadence.CategoryCode = categoryCode
+	Set cadence.InternalSKU = internalSKU
+	Set cadence.UnitsSold = currentHourUnits
+	Set cadence.RevenueSold = currentHourRevenue
+	Set cadence.UnitsBudget = unitsBudget
+	Set cadence.RevenueBudget = revenueBudget
+	Set cadence.UnitsCumulative = unitsCumulative
+	Set cadence.RevenueCumulative = revenueCumulative
+	Set cadence.VarianceUnits = varianceUnits
+	Set cadence.VarianceRevenue = varianceRevenue
+	Set cadence.LastUpdated = lastUpdated
+	Quit cadence.%Save()
 }
 
-ClassMethod EvaluateRules(storeCode As %String, categoryCode As %String, saleDate As %Date, paceId As %String, unitsBudget As %Integer, revenueBudget As %Numeric, unitsCumulative As %Integer, revenueCumulative As %Numeric, varianceUnits As %Numeric, Output recommendationId As %String) As %Status
+ClassMethod EvaluateRules(storeCode As %String, categoryCode As %String, saleDate As %Date, saleHour As %Integer, paceId As %String, unitsBudget As %Integer, revenueBudget As %Numeric, unitsCumulative As %Integer, revenueCumulative As %Numeric, varianceUnits As %Numeric, Output recommendationId As %String) As %Status
 {
 	Set recommendationId = ""
 	Set ruleCode = ""
 	Set rulePriority = 99
-	Set ruleWindowType = "PACE"
+	Set ruleWindowType = "CADENCIA"
 	Set ruleThreshold = -25
 	Set ruleObservedValue = varianceUnits
 	Set ruleSeverity = "LOW"
-	Set businessMessage = "No action required"
+	Set businessMessage = "Sin accion requerida"
 	Set executionState = "NEW"
 	If ##class(Rules.PaceRules).IsCritical(varianceUnits) {
 		Set ruleCode = "PACE_NEGATIVE_CRITICAL"
 		Set ruleSeverity = "HIGH"
-		Set businessMessage = "Critical pace deviation detected"
-	} ElseIf ##class(Rules.PaceRules).IsSustained(..CountBelowThreshold(storeCode, categoryCode, saleDate, -10), 3) {
+		Set businessMessage = "Critical cadence deviation detected"
+	} ElseIf ##class(Rules.PaceRules).IsSustained(..CountBelowThreshold(storeCode, categoryCode, saleDate, saleHour, -10), 3) {
 		Set ruleCode = "PACE_NEGATIVE_SUSTAINED"
-		Set ruleWindowType = "HOURLY_STREAK"
+		Set ruleWindowType = "RACHA_HORARIA"
 		Set ruleThreshold = 3
-		Set ruleObservedValue = ..CountBelowThreshold(storeCode, categoryCode, saleDate, -10)
+		Set ruleObservedValue = ..CountBelowThreshold(storeCode, categoryCode, saleDate, saleHour, -10)
 		Set ruleSeverity = "MEDIUM"
-		Set businessMessage = "Pace has been below threshold for consecutive windows"
-	} ElseIf ##class(Rules.PaceRules).IsStockoutInferred(..CountWithoutSales(storeCode, categoryCode, saleDate), 2) {
+		Set businessMessage = "Cadence has been below threshold for consecutive windows"
+	} ElseIf ##class(Rules.PaceRules).IsStockoutInferred(..CountWithoutSales(storeCode, categoryCode, saleDate, saleHour), 2) {
 		Set ruleCode = "STOCKOUT_INFERRED"
-		Set ruleWindowType = "NO_SALES"
+		Set ruleWindowType = "SIN_VENTAS"
 		Set ruleThreshold = 2
-		Set ruleObservedValue = ..CountWithoutSales(storeCode, categoryCode, saleDate)
+		Set ruleObservedValue = ..CountWithoutSales(storeCode, categoryCode, saleDate, saleHour)
 		Set ruleSeverity = "HIGH"
 		Set businessMessage = "No sales detected for consecutive windows"
 	}
@@ -174,9 +192,15 @@ ClassMethod CreateRecommendation(ruleCode As %String, storeCode As %String, cate
 	Quit recommendation.%Save()
 }
 
+ClassMethod BuildCadenceId(storeCode As %String, categoryCode As %String, internalSKU As %String, saleDate As %Date, saleHour As %Integer) As %String
+{
+	Set scopeSKU = $Select(internalSKU'="":internalSKU, 1:"__CATEGORY__")
+	Quit storeCode _ "|" _ categoryCode _ "|" _ scopeSKU _ "|" _ saleDate _ "|" _ saleHour
+}
+
 ClassMethod BuildPaceId(storeCode As %String, categoryCode As %String, saleDate As %Date, saleHour As %Integer) As %String
 {
-	Quit storeCode _ "|" _ categoryCode _ "|" _ saleDate _ "|" _ saleHour
+	Quit ..BuildCadenceId(storeCode, categoryCode, "__CATEGORY__", saleDate, saleHour)
 }
 
 ClassMethod CalculatePct(actual As %Numeric, budget As %Numeric) As %Numeric
@@ -185,9 +209,24 @@ ClassMethod CalculatePct(actual As %Numeric, budget As %Numeric) As %Numeric
 	Quit (actual / budget) * 100
 }
 
-ClassMethod GetBudgetUnits(saleDate As %Date, storeCode As %String, categoryCode As %String) As %Integer
+ClassMethod ExpectedBudgetAtHour(dailyBudget As %Numeric, saleHour As %Integer) As %Numeric
+{
+	Set hourFraction = (saleHour + 1) / 24
+	If hourFraction < 0 Set hourFraction = 0
+	If hourFraction > 1 Set hourFraction = 1
+	Quit dailyBudget * hourFraction
+}
+
+ClassMethod GetBudgetUnits(saleDate As %Date, storeCode As %String, categoryCode As %String, internalSKU As %String = "") As %Integer
 {
 	Set stmt = ##class(%SQL.Statement).%New()
+	If internalSKU'="" {
+		Set sc = stmt.%Prepare("SELECT TargetUnits FROM MD.SalesBudget WHERE BudgetDate = ? AND StoreCode = ? AND CategoryCode = ? AND InternalSKU = ?")
+		If '$SYSTEM.Status.IsError(sc) {
+			Set rs = stmt.%Execute(saleDate, storeCode, categoryCode, internalSKU)
+			If rs.%Next() Quit +rs.%GetData(1)
+		}
+	}
 	Set sc = stmt.%Prepare("SELECT TargetUnits FROM MD.SalesBudget WHERE BudgetDate = ? AND StoreCode = ? AND CategoryCode = ? AND (InternalSKU IS NULL OR InternalSKU = '')")
 	If '$SYSTEM.Status.IsError(sc) {
 		Set rs = stmt.%Execute(saleDate, storeCode, categoryCode)
@@ -196,9 +235,16 @@ ClassMethod GetBudgetUnits(saleDate As %Date, storeCode As %String, categoryCode
 	Quit +$Get(^IRIS111("budget", saleDate, storeCode, categoryCode, "__CATEGORY__", "units"), 0)
 }
 
-ClassMethod GetBudgetRevenue(saleDate As %Date, storeCode As %String, categoryCode As %String) As %Numeric
+ClassMethod GetBudgetRevenue(saleDate As %Date, storeCode As %String, categoryCode As %String, internalSKU As %String = "") As %Numeric
 {
 	Set stmt = ##class(%SQL.Statement).%New()
+	If internalSKU'="" {
+		Set sc = stmt.%Prepare("SELECT TargetRevenue FROM MD.SalesBudget WHERE BudgetDate = ? AND StoreCode = ? AND CategoryCode = ? AND InternalSKU = ?")
+		If '$SYSTEM.Status.IsError(sc) {
+			Set rs = stmt.%Execute(saleDate, storeCode, categoryCode, internalSKU)
+			If rs.%Next() Quit +rs.%GetData(1)
+		}
+	}
 	Set sc = stmt.%Prepare("SELECT TargetRevenue FROM MD.SalesBudget WHERE BudgetDate = ? AND StoreCode = ? AND CategoryCode = ? AND (InternalSKU IS NULL OR InternalSKU = '')")
 	If '$SYSTEM.Status.IsError(sc) {
 		Set rs = stmt.%Execute(saleDate, storeCode, categoryCode)
@@ -207,28 +253,32 @@ ClassMethod GetBudgetRevenue(saleDate As %Date, storeCode As %String, categoryCo
 	Quit +$Get(^IRIS111("budget", saleDate, storeCode, categoryCode, "__CATEGORY__", "revenue"), 0)
 }
 
-ClassMethod CountBelowThreshold(storeCode As %String, categoryCode As %String, saleDate As %Date, threshold As %Numeric = -25) As %Integer
+ClassMethod CountBelowThreshold(storeCode As %String, categoryCode As %String, saleDate As %Date, saleHour As %Integer, threshold As %Numeric = -25) As %Integer
 {
 	New count
 	Set count = 0
 	&sql(SELECT COUNT(*) INTO :count
-		FROM Gold.CategoryPace
+		FROM Gold.SalesCadence
 		WHERE StoreCode = :storeCode
 		  AND CategoryCode = :categoryCode
-		  AND PaceDate = :saleDate
+		  AND InternalSKU = '__CATEGORY__'
+		  AND CadenceDate = :saleDate
+		  AND CadenceHour <= :saleHour
 		  AND VarianceUnits <= :threshold)
 	Quit +$Get(count, 0)
 }
 
-ClassMethod CountWithoutSales(storeCode As %String, categoryCode As %String, saleDate As %Date) As %Integer
+ClassMethod CountWithoutSales(storeCode As %String, categoryCode As %String, saleDate As %Date, saleHour As %Integer) As %Integer
 {
 	New count
 	Set count = 0
 	&sql(SELECT COUNT(*) INTO :count
-		FROM Gold.CategoryPace
+		FROM Gold.SalesCadence
 		WHERE StoreCode = :storeCode
 		  AND CategoryCode = :categoryCode
-		  AND PaceDate = :saleDate
+		  AND InternalSKU = '__CATEGORY__'
+		  AND CadenceDate = :saleDate
+		  AND CadenceHour <= :saleHour
 		  AND UnitsSold = 0)
 	Quit +$Get(count, 0)
 }
@@ -244,9 +294,9 @@ ClassMethod ActionDescription(actionCode As %String) As %String
 ClassMethod RuleDescription(ruleCode As %String) As %String
 {
 	Set ruleCode = $ZCONVERT(ruleCode, "U")
-	If ruleCode = "PACE_NEGATIVE_CRITICAL" Quit "Critical pace deviation"
-	If ruleCode = "PACE_NEGATIVE_SUSTAINED" Quit "Sustained pace deviation"
-	If ruleCode = "STOCKOUT_INFERRED" Quit "Stockout inferred from zero sales"
+	If ruleCode = "PACE_NEGATIVE_CRITICAL" Quit "Desvio critico de cadencia"
+	If ruleCode = "PACE_NEGATIVE_SUSTAINED" Quit "Desvio sostenido de cadencia"
+	If ruleCode = "STOCKOUT_INFERRED" Quit "Stockout inferido por cero ventas"
 	Quit "Manual review required"
 }
 
