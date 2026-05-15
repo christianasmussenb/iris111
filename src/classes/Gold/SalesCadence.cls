@@ -2,7 +2,7 @@ Class Gold.SalesCadence Extends %Persistent
 {
 
 Property CadenceId As %String(MAXLEN = 120) [ Required ];
-Property CadenceDate As %Date [ Required ];
+Property CadenceDate As %Date(FORMAT = 3) [ Required ];
 Property CadenceHour As %Integer [ Required ];
 Property StoreCode As %String(MAXLEN = 20) [ Required ];
 Property CategoryCode As %String(MAXLEN = 50) [ Required ];

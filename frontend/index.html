@@ -22,6 +22,7 @@
             <button id="themeConnectionBtn" class="tab-btn" type="button" role="tab" aria-controls="panelConnection" aria-selected="false">Conexion</button>
             <button id="themeStagesBtn" class="tab-btn" type="button" role="tab" aria-controls="panelStages" aria-selected="false">Etapas</button>
             <button id="themeOpsBtn" class="tab-btn" type="button" role="tab" aria-controls="panelOperations" aria-selected="false">Operacion</button>
+            <button id="themeRawPosBtn" class="tab-btn" type="button" role="tab" aria-controls="panelRawPos" aria-selected="false">TRX crudas</button>
             <button id="themePosBtn" class="tab-btn" type="button" role="tab" aria-controls="panelPos" aria-selected="false">POS de prueba</button>
             <button id="themeBudgetBtn" class="tab-btn" type="button" role="tab" aria-controls="panelBudget" aria-selected="false">Presupuesto</button>
           </div>
@@ -95,7 +96,16 @@
                 <span>SKU de analisis</span>
               <input id="analysisInternalSku" type="text" placeholder="Opcional para detalle SKU" />
             </label>
+            <label class="field">
+                <span>Fecha de cadencia</span>
+              <input id="paceDate" type="date" />
+            </label>
+            <label class="field">
+                <span>Hora de cadencia</span>
+              <input id="paceHour" type="number" min="0" max="23" step="1" placeholder="0-23" />
+            </label>
           </div>
+          <p class="panel-note">La fecha, la hora y el SKU de cadencia se completan con el ultimo POS inyectado, pero puedes cambiarlos antes de cargar la cadencia.</p>
         </section>
 
         <section id="panelStages" class="panel panel--stages theme-panel" role="tabpanel" aria-labelledby="themeStagesBtn" hidden>
@@ -113,7 +123,7 @@
           <div class="panel__header panel__header--tabs">
             <div>
               <h2>Espacio operativo</h2>
-              <p class="panel-note">Cadencia de ventas, recomendaciones, panel y feedback quedan juntos, pero ahora aislados en su propia pestaña.</p>
+              <p class="panel-note">Cadencia de ventas, recomendaciones, panel y feedback quedan alineados con la fecha de cadencia seleccionada en Conexion.</p>
             </div>
           </div>
 
@@ -144,6 +154,7 @@
               <h2>Panel del local</h2>
               <button id="loadDashboardBtn" class="button" type="button">Cargar panel</button>
             </div>
+            <p id="dashboardContext" class="panel-note">El panel usara la fecha de cadencia seleccionada.</p>
             <div id="dashboardList" class="dashboard state-card state-card--empty">
               <p>Las filas del panel apareceran aqui.</p>
             </div>
@@ -190,7 +201,7 @@
             <h2>Inyector POS de prueba</h2>
             <span class="pill">REST /pos/ingest</span>
           </div>
-          <p class="panel-note">Envia una venta de prueba directamente a IRIS por REST. Edita los campos y presiona enviar.</p>
+          <p class="panel-note">Envia una venta de prueba directamente a IRIS por REST. La fecha y hora se inicializan con el momento actual; el presupuesto solo queda como referencia visual.</p>
           <form id="posForm" class="pos-form">
             <label class="field">
               <span>ID de origen</span>
@@ -202,7 +213,7 @@
             </label>
             <label class="field">
               <span>Marca de tiempo UTC</span>
-              <input id="posTimestamp" type="text" value="2026-05-13T08:10:00Z" />
+              <input id="posTimestamp" type="text" placeholder="YYYY-MM-DDTHH:MM:SSZ" />
             </label>
             <label class="field">
               <span>Codigo de categoria</span>
@@ -226,6 +237,20 @@
             </div>
           </form>
           <div id="posResult" class="result-box">Todavia no se envio ningun POS de prueba.</div>
+        </section>
+
+        <section id="panelRawPos" class="panel panel--raw-pos theme-panel" role="tabpanel" aria-labelledby="themeRawPosBtn" hidden>
+          <div class="panel__header panel__header--tabs">
+            <div>
+              <h2>TRX crudas</h2>
+              <p class="panel-note">Bronze, Silver y Gold se muestran en la misma pantalla para seguir el recorrido de la inyeccion POS.</p>
+            </div>
+            <button id="loadRawPosBtn" class="button" type="button">Cargar traza</button>
+          </div>
+          <p id="rawPosContext" class="panel-note">La traza usa el mismo contexto de cadencia seleccionado en Conexion.</p>
+          <div id="rawPosList" class="raw-pos-list state-card state-card--empty">
+            <p>Las trazas POS apareceran aqui.</p>
+          </div>
         </section>
 
         <section id="panelBudget" class="panel panel--budget theme-panel" role="tabpanel" aria-labelledby="themeBudgetBtn" hidden>

@@ -51,6 +51,7 @@ ClassMethod ImportLine(line As %String) As %Status
 	Set targetUnits = $ZStrip($Piece(line, ",", 4), "<>", " ")
 	Set targetRevenue = $ZStrip($Piece(line, ",", 5), "<>", " ")
 	Set internalSKU = $Select(parts >= 6:$ZStrip($Piece(line, ",", 6), "<>", " "), 1:"")
+	If internalSKU'="" Set internalSKU = $ZCONVERT(internalSKU, "U")
 	Set budgetDate = $ZDATEH(budgetDate, 3)
 
 	If budgetDate = "" || storeCode = "" || categoryCode = "" {

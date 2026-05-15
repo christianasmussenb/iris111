@@ -3,8 +3,8 @@ Class MD.SKUPrice Extends %Persistent
 
 Property StoreCode As %String(MAXLEN = 20) [ Required ];
 Property InternalSKU As %String(MAXLEN = 50) [ Required ];
-Property EffectiveStartDate As %Date [ Required ];
-Property EffectiveEndDate As %Date;
+Property EffectiveStartDate As %Date(FORMAT = 3) [ Required ];
+Property EffectiveEndDate As %Date(FORMAT = 3);
 Property Price As %Numeric [ Required ];
 Property Currency As %String(MAXLEN = 3) [ InitialExpression = "COP" ];
 Property LoadedAt As %TimeStamp;

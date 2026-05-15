@@ -15,6 +15,7 @@ XData UrlMap
 	<Route Url="/budgets" Method="GET" Call="GetBudgets" />
 	<Route Url="/budgets" Method="POST" Call="PostBudget" />
 	<Route Url="/pos/ingest" Method="POST" Call="PostPOSIngest" />
+	<Route Url="/pos/raw/:storeCode" Method="GET" Call="GetPosRaw" />
     <Route Url="/stores/:storeCode/categories/:categoryCode/pace" Method="GET" Call="GetPace" />
 	<Route Url="/recommendations/pending/:storeCode" Method="GET" Call="GetRecommendationsPending" />
     <Route Url="/recommendations/:recommendationId/feedback" Method="POST" Call="PostFeedback" />
@@ -149,12 +150,26 @@ ClassMethod BuildHealthData() As %DynamicObject
 	Quit data
 }
 
+ClassMethod NormalizeDateInput(dateValue As %String, Output normalizedDate As %Date) As %Status
+{
+	Set normalizedDate = ""
+	If dateValue = "" Quit $$$OK
+	If dateValue?1N.N {
+		Set normalizedDate = +dateValue
+		Quit $$$OK
+	}
+	Set normalizedDate = $ZDATEH(dateValue, 3)
+	Quit $$$OK
+}
+
 ClassMethod GetPace(storeCode As %String, categoryCode As %String) As %Status
 {
 	Set internalSKU = $Get(%request.Data("internalSku"))
 	If internalSKU = "" Set internalSKU = $Get(%request.Data("internal_sku"))
+	If internalSKU'="" Set internalSKU = $ZCONVERT($ZSTRIP(internalSKU, "<>", " "), "U")
 	Set paceDate = $Get(%request.Data("paceDate"))
 	If paceDate = "" Set paceDate = $Get(%request.Data("pace_date"))
+	Do ..NormalizeDateInput(paceDate, .paceDate)
 	Set paceHourRaw = $Get(%request.Data("paceHour"))
 	If paceHourRaw = "" Set paceHourRaw = $Get(%request.Data("pace_hour"))
 	Set paceHour = +paceHourRaw
@@ -170,7 +185,7 @@ ClassMethod BuildPaceData(storeCode As %String, categoryCode As %String, interna
 	Set data = ##class(%DynamicObject).%New()
 	Set queryDate = $Select(paceDate'="":paceDate, 1:$P($HOROLOG, ",", 1))
 	Set queryHour = $Select(paceHour>-1:paceHour, 1:+$Piece($ZTIME($HOROLOG, 3), ":", 1))
-	Set querySKU = $Select(internalSKU'="":internalSKU, 1:"__CATEGORY__")
+	Set querySKU = $Select(internalSKU'="":$ZCONVERT(internalSKU, "U"), 1:"__CATEGORY__")
 
 	Set stmt = ##class(%SQL.Statement).%New()
 	Set sc = stmt.%Prepare("SELECT CadenceId, CadenceDate, CadenceHour, StoreCode, CategoryCode, InternalSKU, UnitsSold, RevenueSold, UnitsBudget, RevenueBudget, UnitsCumulative, RevenueCumulative, VarianceUnits, VarianceRevenue, LastUpdated FROM Gold.SalesCadence WHERE CadenceDate = ? AND CadenceHour <= ? AND StoreCode = ? AND CategoryCode = ? AND InternalSKU = ? ORDER BY CadenceHour DESC")
@@ -225,8 +240,32 @@ ClassMethod BuildPendingRecommendationsData(storeCode As %String) As %DynamicArr
 
 ClassMethod GetDashboard(storeCode As %String) As %Status
 {
-	Set data = ..BuildDashboardData(storeCode)
+	Set cadenceDate = $Get(%request.Data("paceDate"))
+	If cadenceDate = "" Set cadenceDate = $Get(%request.Data("cadenceDate"))
+	If cadenceDate = "" Set cadenceDate = $Get(%request.Data("date"))
+	Do ..NormalizeDateInput(cadenceDate, .cadenceDate)
+	Set data = ..BuildDashboardData(storeCode, cadenceDate)
 	Do ..AuditRequest("Gold.SalesCadence", storeCode, "READ_DASHBOARD", "", data.%ToJSON())
+	Do ..WriteJson(data)
+	Quit $$$OK
+}
+
+ClassMethod GetPosRaw(storeCode As %String) As %Status
+{
+	Set categoryCode = $Get(%request.Data("categoryCode"))
+	If categoryCode = "" Set categoryCode = $Get(%request.Data("category_code"))
+	Set internalSKU = $Get(%request.Data("internalSku"))
+	If internalSKU = "" Set internalSKU = $Get(%request.Data("internal_sku"))
+	Set paceDate = $Get(%request.Data("paceDate"))
+	If paceDate = "" Set paceDate = $Get(%request.Data("pace_date"))
+	Do ..NormalizeDateInput(paceDate, .paceDate)
+	Set limitRaw = $Get(%request.Data("limit"))
+	If limitRaw = "" Set limitRaw = $Get(%request.Data("maxItems"))
+	Set limit = +limitRaw
+	If limit < 1 Set limit = 10
+	If limit > 20 Set limit = 20
+	Set data = ..BuildPosRawData(storeCode, categoryCode, internalSKU, paceDate, limit)
+	Do ..AuditRequest("Bronze.POSEvent", storeCode _ $Select(categoryCode'="":"|" _ categoryCode, 1:""), "READ_RAW_POS", "", data.%ToJSON())
 	Do ..WriteJson(data)
 	Quit $$$OK
 }
@@ -282,11 +321,11 @@ ClassMethod ReadRequestBody() As %String
 	Quit content
 }
 
-ClassMethod BuildDashboardData(storeCode As %String) As %DynamicObject
+ClassMethod BuildDashboardData(storeCode As %String, cadenceDate As %String = "") As %DynamicObject
 {
 	Set data = ##class(%DynamicObject).%New()
 	Set data.storeCode = storeCode
-	Set data.date = $P($HOROLOG, ",", 1)
+	Set data.date = $Select(cadenceDate'="":cadenceDate, 1:$P($HOROLOG, ",", 1))
 	Set data.categories = ##class(%DynamicArray).%New()
 	Set stmt = ##class(%SQL.Statement).%New()
 	Set sc = stmt.%Prepare("SELECT CadenceId, CadenceDate, CadenceHour, StoreCode, CategoryCode, InternalSKU, UnitsSold, RevenueSold, UnitsBudget, RevenueBudget, UnitsCumulative, RevenueCumulative, VarianceUnits, VarianceRevenue, LastUpdated FROM Gold.SalesCadence WHERE CadenceDate = ? AND StoreCode = ? AND InternalSKU = '__CATEGORY__' ORDER BY CategoryCode, CadenceHour")
@@ -298,11 +337,111 @@ ClassMethod BuildDashboardData(storeCode As %String) As %DynamicObject
 	Quit data
 }
 
+ClassMethod BuildPosRawData(storeCode As %String, categoryCode As %String = "", internalSKU As %String = "", paceDate As %String = "", limit As %Integer = 10) As %DynamicArray
+{
+	Set items = ##class(%DynamicArray).%New()
+	Set normalizedSKU = $Select(internalSKU'="":$ZCONVERT(internalSKU, "U"), 1:"")
+	Set selectedDate = $Select(paceDate'="":$ZDATE(paceDate, 3), 1:"")
+	Set stmt = ##class(%SQL.Statement).%New()
+	Set sc = stmt.%Prepare("SELECT %ID, SourceId, ReceivedAt, SourceChannel, Payload FROM Bronze.POSEvent ORDER BY ReceivedAt DESC")
+	If $SYSTEM.Status.IsError(sc) Quit items
+	Set rs = stmt.%Execute()
+	While rs.%Next() {
+		Set payload = rs.%GetData(5)
+		Set json = ##class(%DynamicObject).%FromJSON(payload)
+		If '$IsObject(json) {
+			Continue
+		}
+		If storeCode'="", json.%Get("store_code")'=storeCode {
+			Continue
+		}
+		If categoryCode'="", json.%Get("category_code")'=categoryCode {
+			Continue
+		}
+		Set payloadSKU = $Select(json.%Get("internal_sku")'="":$ZCONVERT(json.%Get("internal_sku"), "U"), 1:"")
+		If normalizedSKU'="", payloadSKU'=normalizedSKU {
+			Continue
+		}
+		If selectedDate'="" {
+			Set eventDate = $Extract(json.%Get("timestamp"), 1, 10)
+			If eventDate'=selectedDate {
+				Continue
+			}
+		}
+		Set bronzeSourceId = rs.%GetData(2)
+		Set saleRow = ..GetRelatedSilverSale(bronzeSourceId)
+		Set goldRows = ..GetRelatedGoldRows(storeCode, categoryCode, json.%Get("internal_sku"), json.%Get("timestamp"))
+		Do items.%Push(..PosRawRowToObject(rs, json, saleRow, goldRows))
+		If items.%Size() >= limit {
+			Quit
+		}
+	}
+	Quit items
+}
+
+ClassMethod GetRelatedSilverSale(bronzeSourceId As %String) As %DynamicObject
+{
+	Set data = ##class(%DynamicObject).%New()
+	Set stmt = ##class(%SQL.Statement).%New()
+	Set sc = stmt.%Prepare("SELECT SaleId, SaleTimestamp, StoreCode, InternalSKU, Qty, Price, CategoryCode, SourceEventId FROM Silver.Sale WHERE SourceEventId = ? ORDER BY SaleTimestamp DESC")
+	If $SYSTEM.Status.IsError(sc) {
+		Set data.error = "SILVER_QUERY_FAILED"
+		Quit data
+	}
+	Set rs = stmt.%Execute(bronzeSourceId)
+	If rs.%Next() {
+		Set data.saleId = rs.%GetData(1)
+		Set data.saleTimestamp = rs.%GetData(2)
+		Set data.storeCode = rs.%GetData(3)
+		Set data.internalSku = rs.%GetData(4)
+		Set data.qty = rs.%GetData(5)
+		Set data.price = rs.%GetData(6)
+		Set data.categoryCode = rs.%GetData(7)
+		Set data.sourceEventId = rs.%GetData(8)
+		Set data.lineTotal = (+data.qty) * (+data.price)
+		Quit data
+	}
+	Set data.error = "SILVER_NOT_FOUND"
+	Quit data
+}
+
+ClassMethod GetRelatedGoldRows(storeCode As %String, categoryCode As %String, internalSKU As %String, timestamp As %String) As %DynamicArray
+{
+	Set rows = ##class(%DynamicArray).%New()
+	Set saleDate = $Select(timestamp'="":$ZDATEH($Extract(timestamp, 1, 10), 3), 1:"")
+	If saleDate = "" Quit rows
+	Set saleHour = +$Extract(timestamp, 12, 13)
+	If saleHour < 0 Quit rows
+
+	Set stmt = ##class(%SQL.Statement).%New()
+	Set query = "SELECT CadenceId, CadenceDate, CadenceHour, StoreCode, CategoryCode, InternalSKU, UnitsSold, RevenueSold, UnitsBudget, RevenueBudget, UnitsCumulative, RevenueCumulative, VarianceUnits, VarianceRevenue, LastUpdated FROM Gold.SalesCadence WHERE CadenceDate = ? AND CadenceHour = ? AND StoreCode = ? AND CategoryCode = ? AND InternalSKU = ? ORDER BY InternalSKU"
+	Set sc = stmt.%Prepare(query)
+	If $SYSTEM.Status.IsError(sc) Quit rows
+
+	Set categoryResult = 0
+	Set rs = stmt.%Execute(saleDate, saleHour, storeCode, categoryCode, "__CATEGORY__")
+	If rs.%Next() {
+		Do rows.%Push(..PaceRowToObject(rs))
+		Set categoryResult = 1
+	}
+
+	If internalSKU'="" {
+		Set skuResult = 0
+		Set rs = stmt.%Execute(saleDate, saleHour, storeCode, categoryCode, $ZCONVERT(internalSKU, "U"))
+		If rs.%Next() {
+			Do rows.%Push(..PaceRowToObject(rs))
+			Set skuResult = 1
+		}
+	}
+	Quit rows
+}
+
 ClassMethod BuildBudgetContextData(storeCode As %String, categoryCode As %String, internalSKU As %String = "") As %DynamicObject
 {
 	Set data = ##class(%DynamicObject).%New()
 	Set data.storeCode = storeCode
 	Set data.categoryCode = categoryCode
+	Set internalSKU = $Select(internalSKU'="":$ZCONVERT(internalSKU, "U"), 1:"")
 	Set data.internalSku = internalSKU
 	Set data.timestamp = $ZDATETIME($HOROLOG, 3, 1)
 	Set data.budgetDate = ""
@@ -341,6 +480,7 @@ ClassMethod PercentOf(actual As %Numeric, budget As %Numeric) As %Numeric
 
 ClassMethod BuildBudgetsData(budgetDate As %String = "", storeCode As %String = "", categoryCode As %String = "", internalSKU As %String = "") As %DynamicArray
 {
+	Set internalSKU = $Select(internalSKU'="":$ZCONVERT(internalSKU, "U"), 1:"")
 	Set items = ##class(%DynamicArray).%New()
 
 	Set stmt = ##class(%SQL.Statement).%New()
@@ -378,6 +518,7 @@ ClassMethod SaveBudgetPayload(payload As %DynamicObject, Output result As %Dynam
 	If categoryCode = "" Set categoryCode = payload.%Get("categoryCode")
 	Set internalSKU = payload.%Get("internal_sku")
 	If internalSKU = "" Set internalSKU = payload.%Get("internalSku")
+	If internalSKU'="" Set internalSKU = $ZCONVERT($ZSTRIP(internalSKU, "<>", " "), "U")
 	Set targetUnitsText = payload.%Get("target_units")
 	If targetUnitsText = "" Set targetUnitsText = payload.%Get("targetUnits")
 	Set targetUnits = +targetUnitsText
@@ -606,7 +747,7 @@ ClassMethod PaceRowToObject(row As %SQL.StatementResult) As %DynamicObject
 {
 	Set data = ##class(%DynamicObject).%New()
 	Set data.PaceId = row.%GetData(1)
-	Set data.PaceDate = row.%GetData(2)
+	Set data.PaceDate = $ZDATE(row.%GetData(2), 3)
 	Set data.PaceHour = row.%GetData(3)
 	Set data.StoreCode = row.%GetData(4)
 	Set data.CategoryCode = row.%GetData(5)
@@ -622,6 +763,27 @@ ClassMethod PaceRowToObject(row As %SQL.StatementResult) As %DynamicObject
 	Set data.VarianceUnits = row.%GetData(13)
 	Set data.VarianceRevenue = row.%GetData(14)
 	Set data.LastUpdated = row.%GetData(15)
+	Quit data
+}
+
+ClassMethod PosRawRowToObject(row As %SQL.StatementResult, payload As %DynamicObject, silverSale As %DynamicObject, goldRows As %DynamicArray) As %DynamicObject
+{
+	Set data = ##class(%DynamicObject).%New()
+	Set data.BronzeId = row.%GetData(1)
+	Set data.BronzeSourceId = row.%GetData(2)
+	Set data.SourceId = payload.%Get("source_id")
+	Set data.ReceivedAt = row.%GetData(3)
+	Set data.SourceChannel = row.%GetData(4)
+	Set data.Timestamp = payload.%Get("timestamp")
+	Set data.StoreCode = payload.%Get("store_code")
+	Set data.CategoryCode = payload.%Get("category_code")
+	Set data.InternalSKU = payload.%Get("internal_sku")
+	Set data.Qty = +payload.%Get("qty")
+	Set data.Price = +payload.%Get("price")
+	Set data.LineTotal = data.Qty * data.Price
+	Set data.Payload = row.%GetData(5)
+	Set data.SilverSale = silverSale
+	Set data.GoldRows = goldRows
 	Quit data
 }
 

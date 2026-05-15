@@ -601,6 +601,15 @@ h3 {
   font-family: "Space Grotesk", "Inter", system-ui, sans-serif;
 }
 
+.pace-summary__context {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .metric-grid--pace {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
@@ -622,6 +631,107 @@ h3 {
 .dashboard {
   display: grid;
   gap: 14px;
+}
+
+.raw-pos-list {
+  display: grid;
+  gap: 14px;
+}
+
+.panel--raw-pos {
+  display: grid;
+  gap: 18px;
+}
+
+.raw-pos-item {
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 0.84rem;
+  display: grid;
+  gap: 12px;
+}
+
+.raw-pos-section {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(10, 16, 32, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.raw-pos-section__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  color: var(--text);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.raw-pos-section__head span {
+  color: var(--muted);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.raw-pos-gold {
+  display: grid;
+  gap: 10px;
+  padding-top: 2px;
+}
+
+.raw-pos-item__top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: start;
+  min-width: 0;
+}
+
+.raw-pos-item__top strong,
+.raw-pos-item__top p,
+.raw-pos-item__payload {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.raw-pos-item__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.raw-pos-item__grid > div {
+  min-width: 0;
+}
+
+.raw-pos-item__grid dt {
+  color: var(--muted);
+  font-size: 0.64rem;
+}
+
+.raw-pos-item__grid dd {
+  margin: 4px 0 0;
+  font-weight: 600;
+  font-size: 0.84rem;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.raw-pos-item__payload {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(10, 16, 32, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
 }
 
 .budget-grid {

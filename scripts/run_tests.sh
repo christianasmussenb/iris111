@@ -120,6 +120,9 @@ if categoryPace.paceId = "" { write !,"FAIL: missing gold category pace row",! h
 if categoryPace.internalSku '= "" { write !,"FAIL: expected gold category rollup row",! halt }
 if +categoryPace.unitsSold '= 2 { write !,"FAIL: expected 2 category sold units",! halt }
 
+set rawPos = ##class(API.UIController).BuildPosRawData(storeCode, categoryCode, internalSKU, budgetDate, 10)
+if rawPos.%Size() < 1 { write !,"FAIL: expected at least 1 raw pos row",! halt }
+
 write !,"pos smoke passed",!
 halt
 EOF

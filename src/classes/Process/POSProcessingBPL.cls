@@ -35,7 +35,7 @@ ClassMethod NormalizeSale(payload As %String, bronzeId As %String, Output saleId
 	Set saleId = bronzeId _ "-SALE"
 	Set storeCode = json.%Get("store_code")
 	Set categoryCode = json.%Get("category_code")
-	Set internalSKU = json.%Get("internal_sku")
+	Set internalSKU = $ZCONVERT(json.%Get("internal_sku"), "U")
 	Set quantity = +json.%Get("qty")
 	Set unitPrice = +json.%Get("price")
 	Set lineTotal = quantity * unitPrice
@@ -194,7 +194,7 @@ ClassMethod CreateRecommendation(ruleCode As %String, storeCode As %String, cate
 
 ClassMethod BuildCadenceId(storeCode As %String, categoryCode As %String, internalSKU As %String, saleDate As %Date, saleHour As %Integer) As %String
 {
-	Set scopeSKU = $Select(internalSKU'="":internalSKU, 1:"__CATEGORY__")
+	Set scopeSKU = $Select(internalSKU'="":$ZCONVERT(internalSKU, "U"), 1:"__CATEGORY__")
 	Quit storeCode _ "|" _ categoryCode _ "|" _ scopeSKU _ "|" _ saleDate _ "|" _ saleHour
 }
 
@@ -219,6 +219,7 @@ ClassMethod ExpectedBudgetAtHour(dailyBudget As %Numeric, saleHour As %Integer) 
 
 ClassMethod GetBudgetUnits(saleDate As %Date, storeCode As %String, categoryCode As %String, internalSKU As %String = "") As %Integer
 {
+	Set internalSKU = $Select(internalSKU'="":$ZCONVERT(internalSKU, "U"), 1:"")
 	Set stmt = ##class(%SQL.Statement).%New()
 	If internalSKU'="" {
 		Set sc = stmt.%Prepare("SELECT TargetUnits FROM MD.SalesBudget WHERE BudgetDate = ? AND StoreCode = ? AND CategoryCode = ? AND InternalSKU = ?")
@@ -237,6 +238,7 @@ ClassMethod GetBudgetUnits(saleDate As %Date, storeCode As %String, categoryCode
 
 ClassMethod GetBudgetRevenue(saleDate As %Date, storeCode As %String, categoryCode As %String, internalSKU As %String = "") As %Numeric
 {
+	Set internalSKU = $Select(internalSKU'="":$ZCONVERT(internalSKU, "U"), 1:"")
 	Set stmt = ##class(%SQL.Statement).%New()
 	If internalSKU'="" {
 		Set sc = stmt.%Prepare("SELECT TargetRevenue FROM MD.SalesBudget WHERE BudgetDate = ? AND StoreCode = ? AND CategoryCode = ? AND InternalSKU = ?")

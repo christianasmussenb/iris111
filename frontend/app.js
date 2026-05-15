@@ -3,10 +3,16 @@ const state = {
   storeCode: 'GT-0145',
   categoryCode: 'BEBIDAS',
   analysisInternalSku: '',
+  paceDate: '',
+  paceHour: '',
+  lastPosTimestamp: '',
+  lastPosInternalSku: '',
+  lastPosSourceId: '',
   healthStatus: '--',
   paceData: null,
   pendingRecommendations: [],
   dashboardRows: [],
+  rawPosRows: [],
   budgetRows: [],
   selectedBudgetRowId: '',
   posBudgetDate: '',
@@ -56,6 +62,8 @@ const elements = {
   storeCode: document.getElementById('storeCode'),
   categoryCode: document.getElementById('categoryCode'),
   analysisInternalSku: document.getElementById('analysisInternalSku'),
+  paceDate: document.getElementById('paceDate'),
+  paceHour: document.getElementById('paceHour'),
   healthStatus: document.getElementById('healthStatus'),
   storeLabel: document.getElementById('storeLabel'),
   categoryLabel: document.getElementById('categoryLabel'),
@@ -80,6 +88,9 @@ const elements = {
   budgetResult: document.getElementById('budgetResult'),
   budgetCount: document.getElementById('budgetCount'),
   budgetList: document.getElementById('budgetList'),
+  dashboardContext: document.getElementById('dashboardContext'),
+  rawPosContext: document.getElementById('rawPosContext'),
+  rawPosList: document.getElementById('rawPosList'),
   posForm: document.getElementById('posForm'),
   posSourceId: document.getElementById('posSourceId'),
   posStoreCode: document.getElementById('posStoreCode'),
@@ -100,6 +111,7 @@ const elements = {
   loadPaceBtn: document.getElementById('loadPaceBtn'),
   loadPendingBtn: document.getElementById('loadPendingBtn'),
   loadDashboardBtn: document.getElementById('loadDashboardBtn'),
+  loadRawPosBtn: document.getElementById('loadRawPosBtn'),
   loadBudgetsBtn: document.getElementById('loadBudgetsBtn'),
   budgetFilterResetBtn: document.getElementById('budgetFilterResetBtn'),
   budgetResetBtn: document.getElementById('budgetResetBtn'),
@@ -110,12 +122,14 @@ const elements = {
   themeConnectionBtn: document.getElementById('themeConnectionBtn'),
   themeStagesBtn: document.getElementById('themeStagesBtn'),
   themeOpsBtn: document.getElementById('themeOpsBtn'),
+  themeRawPosBtn: document.getElementById('themeRawPosBtn'),
   themePosBtn: document.getElementById('themePosBtn'),
   themeBudgetBtn: document.getElementById('themeBudgetBtn'),
   panelOverview: document.getElementById('panelOverview'),
   panelConnection: document.getElementById('panelConnection'),
   panelStages: document.getElementById('panelStages'),
   panelOperations: document.getElementById('panelOperations'),
+  panelRawPos: document.getElementById('panelRawPos'),
   panelPos: document.getElementById('panelPos'),
   panelBudget: document.getElementById('panelBudget'),
 };
@@ -124,7 +138,10 @@ function readConfig() {
   state.apiBaseUrl = normalizeBaseUrl(elements.apiBaseUrl.value.trim() || getDefaultApiBaseUrl());
   state.storeCode = elements.storeCode.value.trim() || 'GT-0145';
   state.categoryCode = elements.categoryCode.value.trim() || 'BEBIDAS';
-  state.analysisInternalSku = elements.analysisInternalSku.value.trim();
+  state.analysisInternalSku = elements.analysisInternalSku.value.trim().toUpperCase();
+  elements.analysisInternalSku.value = state.analysisInternalSku;
+  state.paceDate = elements.paceDate.value.trim();
+  state.paceHour = elements.paceHour.value.trim();
   elements.storeLabel.textContent = state.storeCode;
   elements.categoryLabel.textContent = state.categoryCode;
   renderStages();
@@ -138,6 +155,66 @@ function readConfig() {
 
 function normalizeBaseUrl(value) {
   return value.endsWith('/') ? value.slice(0, -1) : value;
+}
+
+function getCurrentUtcHour() {
+  return Number(new Date().toISOString().slice(11, 13));
+}
+
+function parseUtcTimestamp(timestamp) {
+  const normalized = String(timestamp || '').trim();
+  if (normalized.length < 13) {
+    return null;
+  }
+
+  const paceDate = normalized.slice(0, 10);
+  const paceHour = Number.parseInt(normalized.slice(11, 13), 10);
+  if (!paceDate || Number.isNaN(paceHour)) {
+    return null;
+  }
+
+  return { paceDate, paceHour };
+}
+
+function setPaceSelectionFromTimestamp(timestamp, internalSku = '', sourceId = '') {
+  const parsed = parseUtcTimestamp(timestamp);
+  if (!parsed) {
+    return;
+  }
+
+  if (elements.paceDate) {
+    elements.paceDate.value = parsed.paceDate;
+  }
+
+  if (elements.paceHour) {
+    elements.paceHour.value = String(parsed.paceHour);
+  }
+
+  if (elements.analysisInternalSku && internalSku) {
+    elements.analysisInternalSku.value = internalSku.toUpperCase();
+  }
+
+  state.lastPosTimestamp = timestamp;
+  state.lastPosInternalSku = internalSku ? internalSku.toUpperCase() : state.lastPosInternalSku;
+  state.lastPosSourceId = sourceId || state.lastPosSourceId;
+  state.paceDate = parsed.paceDate;
+  state.paceHour = String(parsed.paceHour);
+  state.analysisInternalSku = elements.analysisInternalSku.value.trim().toUpperCase();
+}
+
+function getSelectedPaceContext() {
+  const selectedDate = elements.paceDate?.value.trim() || parseUtcTimestamp(state.lastPosTimestamp)?.paceDate || getCurrentUtcDate();
+  const selectedHourValue = elements.paceHour?.value.trim();
+  const parsedLastPos = parseUtcTimestamp(state.lastPosTimestamp);
+  const selectedHour = selectedHourValue !== ''
+    ? Number.parseInt(selectedHourValue, 10)
+    : (parsedLastPos?.paceHour ?? getCurrentUtcHour());
+
+  return {
+    paceDate: selectedDate,
+    paceHour: Number.isNaN(selectedHour) ? getCurrentUtcHour() : selectedHour,
+    internalSku: elements.analysisInternalSku.value.trim().toUpperCase(),
+  };
 }
 
 async function requestJson(path, options = {}) {
@@ -203,6 +280,7 @@ function setActiveTheme(themeName) {
     { button: elements.themeConnectionBtn, panel: elements.panelConnection, name: 'connection' },
     { button: elements.themeStagesBtn, panel: elements.panelStages, name: 'stages' },
     { button: elements.themeOpsBtn, panel: elements.panelOperations, name: 'operations' },
+    { button: elements.themeRawPosBtn, panel: elements.panelRawPos, name: 'rawpos' },
     { button: elements.themePosBtn, panel: elements.panelPos, name: 'pos' },
     { button: elements.themeBudgetBtn, panel: elements.panelBudget, name: 'budget' },
   ];
@@ -216,6 +294,10 @@ function setActiveTheme(themeName) {
 
   if (themeName === 'operations') {
     void Promise.all([loadPace(), loadPendingRecommendations(), loadDashboard()]);
+  }
+
+  if (themeName === 'rawpos') {
+    void loadRawPosEvents();
   }
 
   if (themeName === 'pos') {
@@ -263,6 +345,9 @@ function renderStages() {
   const recCount = state.pendingRecommendations.length;
   const dashboardCount = state.dashboardRows.length;
   const analysisSku = state.analysisInternalSku || 'categoria';
+  const paceContext = state.paceDate && state.paceHour !== ''
+    ? `${state.paceDate} ${String(state.paceHour).padStart(2, '0')}h`
+    : state.lastPosTimestamp || 'auto';
   const paceTone = pace?.error === 'PACE_NOT_FOUND'
     ? 'warn'
     : Number(pace?.pctPaceUnits) >= 100
@@ -294,6 +379,7 @@ function renderStages() {
       { label: 'Local', value: state.storeCode },
       { label: 'Categoria', value: state.categoryCode },
       { label: 'SKU analisis', value: analysisSku },
+      { label: 'Cadencia', value: paceContext },
       { label: 'Contexto de presupuesto', value: state.posBudgetDate || 'pendiente' },
     ],
   }));
@@ -365,11 +451,6 @@ function getCurrentUtcDate() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function toUtcTimestampForDate(dateValue) {
-  const timePart = getCurrentUtcTimestamp().slice(11);
-  return `${dateValue}T${timePart}`;
-}
-
 function getBudgetDateDefault() {
   return state.posBudgetDate || getCurrentUtcDate();
 }
@@ -381,11 +462,17 @@ function getRandomPosSku() {
 function resetPosSample() {
   elements.posSourceId.value = posDefaults.sourceId;
   elements.posStoreCode.value = posDefaults.storeCode;
-  elements.posTimestamp.value = state.posBudgetDate ? toUtcTimestampForDate(state.posBudgetDate) : getCurrentUtcTimestamp();
+  elements.posTimestamp.value = getCurrentUtcTimestamp();
   elements.posCategoryCode.value = posDefaults.categoryCode;
   elements.posInternalSku.value = getRandomPosSku();
   elements.posQty.value = posDefaults.qty;
   elements.posPrice.value = posDefaults.price;
+}
+
+function syncPaceControlsFromCurrentPos() {
+  const sourceTimestamp = state.lastPosTimestamp || elements.posTimestamp.value;
+  const sourceInternalSku = state.lastPosInternalSku || elements.posInternalSku.value;
+  setPaceSelectionFromTimestamp(sourceTimestamp, sourceInternalSku, state.lastPosSourceId);
 }
 
 function resetBudgetSample() {
@@ -425,17 +512,18 @@ async function loadPosBudgetContext() {
     const data = await requestJson(contextPath);
     if (data?.budgetDate) {
       state.posBudgetDate = data.budgetDate;
-      elements.posResult.textContent = `Contexto de presupuesto cargado para ${data.budgetDate}.`;
+      elements.posResult.textContent = `Referencia visual de presupuesto cargada para ${data.budgetDate}.`;
     } else {
       state.posBudgetDate = '';
-      elements.posResult.textContent = 'No se encontro contexto de presupuesto para este local/categoria.';
+      elements.posResult.textContent = 'No se encontro referencia visual de presupuesto para este local/categoria.';
     }
   } catch (error) {
     state.posBudgetDate = '';
-    elements.posResult.textContent = `Error al cargar el contexto de presupuesto: ${error.message}`;
+    elements.posResult.textContent = `Error al cargar la referencia visual de presupuesto: ${error.message}`;
   }
 
   resetPosSample();
+  syncPaceControlsFromCurrentPos();
   resetBudgetSample();
   syncBudgetFilterDefaults();
   renderStages();
@@ -610,7 +698,7 @@ function buildPosPayload() {
     store_code: elements.posStoreCode.value.trim(),
     timestamp: elements.posTimestamp.value.trim(),
     category_code: elements.posCategoryCode.value.trim(),
-    internal_sku: elements.posInternalSku.value.trim(),
+    internal_sku: elements.posInternalSku.value.trim().toUpperCase(),
     qty: Number(elements.posQty.value),
     price: Number(elements.posPrice.value),
   };
@@ -627,8 +715,20 @@ function renderPosResult(data) {
 
 function renderPace(data) {
   state.paceData = data;
+  const paceContext = getSelectedPaceContext();
+  const paceContextLabel = `${paceContext.paceDate} · ${String(paceContext.paceHour).padStart(2, '0')}h · ${paceContext.internalSku || 'categoria'}`;
+  const paceSourceLabel = state.lastPosSourceId || 'sin POS registrado';
   if (data?.error === 'PACE_NOT_FOUND') {
-    elements.paceCard.innerHTML = '<p>No se encontro una fila de cadencia de ventas para el local y la categoria seleccionados.</p>';
+    elements.paceCard.innerHTML = `
+      <div class="pace-summary">
+        <div class="pace-summary__headline">
+          <strong>Sin datos</strong>
+          <span>${paceContextLabel}</span>
+        </div>
+        <p class="pace-summary__context">POS origen: ${paceSourceLabel}</p>
+        <p class="pace-summary__context">No se encontro una fila de cadencia de ventas para el local, la categoria y el contexto seleccionado.</p>
+      </div>
+    `;
     elements.paceValue.textContent = 'Sin datos';
     renderStages();
     return;
@@ -638,8 +738,10 @@ function renderPace(data) {
     <div class="pace-summary">
       <div class="pace-summary__headline">
         <strong>${formatValue(data.pctPaceUnits)}%</strong>
-        <span>${formatValue(data.paceId)}</span>
+        <span>${paceContextLabel}</span>
       </div>
+      <p class="pace-summary__context">POS origen: ${paceSourceLabel}</p>
+      <p class="pace-summary__context">${formatValue(data.paceId)}</p>
       <div class="metric-grid metric-grid--pace">
         <div class="stat-card">
           <span>Hora</span>
@@ -705,11 +807,17 @@ function renderRecommendations(items) {
   renderStages();
 }
 
-function renderDashboard(data) {
+function renderDashboard(data, paceContext = null) {
   elements.dashboardList.innerHTML = '';
   const items = Array.isArray(data.categories) ? data.categories : [];
   state.dashboardRows = items;
   elements.dashboardCount.textContent = String(items.length);
+  if (elements.dashboardContext) {
+    const dashboardDateLabel = paceContext?.paceDate || data?.date || 'seleccionada';
+    elements.dashboardContext.textContent = dashboardDateLabel
+      ? `Panel calculado para la fecha de cadencia ${dashboardDateLabel}.`
+      : 'El panel usara la fecha de cadencia seleccionada.';
+  }
 
   if (!items.length) {
     elements.dashboardList.classList.add('state-card--empty');
@@ -743,6 +851,104 @@ function renderDashboard(data) {
   renderStages();
 }
 
+function renderRawPosEvents(items, paceContext = null) {
+  state.rawPosRows = Array.isArray(items) ? items : [];
+  elements.rawPosList.innerHTML = '';
+  const contextLabel = paceContext?.paceDate || state.lastPosTimestamp || 'auto';
+  if (elements.rawPosContext) {
+    elements.rawPosContext.textContent = `Trx crudas para ${contextLabel} · ${paceContext?.internalSku || 'categoria'} · ${state.categoryCode}`;
+  }
+
+  if (!state.rawPosRows.length) {
+    elements.rawPosList.classList.add('state-card--empty');
+    elements.rawPosList.innerHTML = '<p>No hay trx POS crudas para el contexto seleccionado.</p>';
+    return;
+  }
+
+  elements.rawPosList.classList.remove('state-card--empty');
+  for (const row of state.rawPosRows) {
+    const silverSale = row.SilverSale || {};
+    const goldRows = Array.isArray(row.GoldRows) ? row.GoldRows : [];
+    const item = document.createElement('article');
+    item.className = 'raw-pos-item';
+    item.innerHTML = `
+      <div class="raw-pos-item__top">
+        <div>
+          <strong>${formatValue(row.SourceId)}</strong>
+          <p>${formatValue(row.Timestamp)} · ${formatValue(row.BronzeSourceId || row.BronzeId)}</p>
+        </div>
+        <span class="pill">${formatValue(row.SourceChannel || 'REST')}</span>
+      </div>
+      <section class="raw-pos-section">
+        <div class="raw-pos-section__head">
+          <strong>Bronze.POSEvent</strong>
+          <span>${formatValue(row.BronzeSourceId || row.BronzeId)}</span>
+        </div>
+        <div class="raw-pos-item__grid">
+          <div><dt>Local</dt><dd>${formatValue(row.StoreCode)}</dd></div>
+          <div><dt>Categoria</dt><dd>${formatValue(row.CategoryCode)}</dd></div>
+          <div><dt>SKU</dt><dd>${formatValue(row.InternalSKU)}</dd></div>
+          <div><dt>Cantidad</dt><dd>${formatValue(row.Qty)}</dd></div>
+        </div>
+        <div class="raw-pos-item__grid">
+          <div><dt>Precio</dt><dd>${formatValue(row.Price)}</dd></div>
+          <div><dt>Total</dt><dd>${formatValue(row.LineTotal)}</dd></div>
+          <div><dt>Recibido</dt><dd>${formatValue(row.ReceivedAt)}</dd></div>
+          <div><dt>Fuente</dt><dd>${formatValue(row.SourceChannel)}</dd></div>
+        </div>
+        <p class="raw-pos-item__payload">${formatValue(row.Payload)}</p>
+      </section>
+      <section class="raw-pos-section">
+        <div class="raw-pos-section__head">
+          <strong>Silver.Sale</strong>
+          <span>${formatValue(silverSale.saleId || silverSale.error)}</span>
+        </div>
+        ${silverSale.error ? `
+          <p class="raw-pos-item__payload">No se encontro una fila Silver relacionada para esta inyeccion.</p>
+        ` : `
+          <div class="raw-pos-item__grid">
+            <div><dt>SaleId</dt><dd>${formatValue(silverSale.saleId)}</dd></div>
+            <div><dt>SaleTimestamp</dt><dd>${formatValue(silverSale.saleTimestamp)}</dd></div>
+            <div><dt>StoreCode</dt><dd>${formatValue(silverSale.storeCode)}</dd></div>
+            <div><dt>SourceEventId</dt><dd>${formatValue(silverSale.sourceEventId)}</dd></div>
+          </div>
+          <div class="raw-pos-item__grid">
+            <div><dt>SKU</dt><dd>${formatValue(silverSale.internalSku)}</dd></div>
+            <div><dt>Cantidad</dt><dd>${formatValue(silverSale.qty)}</dd></div>
+            <div><dt>Precio</dt><dd>${formatValue(silverSale.price)}</dd></div>
+            <div><dt>Total</dt><dd>${formatValue(silverSale.lineTotal)}</dd></div>
+          </div>
+        `}
+      </section>
+      <section class="raw-pos-section">
+        <div class="raw-pos-section__head">
+          <strong>Gold.SalesCadence</strong>
+          <span>${goldRows.length ? `${goldRows.length} fila${goldRows.length === 1 ? '' : 's'}` : 'sin filas'}</span>
+        </div>
+        ${goldRows.length ? goldRows.map((goldRow) => `
+          <div class="raw-pos-gold">
+            <div class="raw-pos-item__grid">
+              <div><dt>PaceId</dt><dd>${formatValue(goldRow.PaceId)}</dd></div>
+              <div><dt>Hora</dt><dd>${formatValue(goldRow.PaceHour)}</dd></div>
+              <div><dt>SKU</dt><dd>${formatValue(goldRow.InternalSKU || 'CONSOLIDADO')}</dd></div>
+              <div><dt>Actualizado</dt><dd>${formatValue(goldRow.LastUpdated)}</dd></div>
+            </div>
+            <div class="raw-pos-item__grid">
+              <div><dt>Vendidas</dt><dd>${formatValue(goldRow.UnitsSold)}</dd></div>
+              <div><dt>Presupuesto</dt><dd>${formatValue(goldRow.UnitsBudget)}</dd></div>
+              <div><dt>Variacion</dt><dd>${formatValue(goldRow.VarianceUnits)}</dd></div>
+              <div><dt>Acumulado</dt><dd>${formatValue(goldRow.UnitsCumulative)}</dd></div>
+            </div>
+          </div>
+        `).join('') : '<p class="raw-pos-item__payload">No se encontro fila Gold relacionada para esta inyeccion.</p>'}
+      </section>
+    `;
+    elements.rawPosList.appendChild(item);
+  }
+
+  renderStages();
+}
+
 async function loadHealth() {
   try {
     setLoading(elements.healthStatus, true);
@@ -764,9 +970,16 @@ async function loadPace() {
   try {
     setLoading(elements.paceCard, true);
     elements.paceCard.innerHTML = '<p>Cargando cadencia de ventas...</p>';
+    const paceContext = getSelectedPaceContext();
     const paceParams = new URLSearchParams();
-    if (state.analysisInternalSku) {
-      paceParams.set('internalSku', state.analysisInternalSku);
+    if (paceContext.internalSku) {
+      paceParams.set('internalSku', paceContext.internalSku);
+    }
+    if (paceContext.paceDate) {
+      paceParams.set('paceDate', paceContext.paceDate);
+    }
+    if (paceContext.paceHour !== undefined && paceContext.paceHour !== null && paceContext.paceHour !== '') {
+      paceParams.set('paceHour', String(paceContext.paceHour));
     }
     const paceQuery = paceParams.toString();
     const pacePath = `/stores/${encodeURIComponent(state.storeCode)}/categories/${encodeURIComponent(state.categoryCode)}/pace${paceQuery ? `?${paceQuery}` : ''}`;
@@ -799,12 +1012,44 @@ async function loadDashboard() {
   try {
     setLoading(elements.dashboardList, true);
     elements.dashboardList.innerHTML = '<p>Cargando panel...</p>';
-    const data = await requestJson(`/dashboard/store/${encodeURIComponent(state.storeCode)}`);
-    renderDashboard(data);
+    const paceContext = getSelectedPaceContext();
+    const dashboardParams = new URLSearchParams();
+    if (paceContext.paceDate) {
+      dashboardParams.set('paceDate', paceContext.paceDate);
+    }
+    const dashboardQuery = dashboardParams.toString();
+    const dashboardPath = `/dashboard/store/${encodeURIComponent(state.storeCode)}${dashboardQuery ? `?${dashboardQuery}` : ''}`;
+    const data = await requestJson(dashboardPath);
+    renderDashboard(data, paceContext);
   } catch (error) {
     elements.dashboardList.innerHTML = `<p>${error.message}</p>`;
   } finally {
     setLoading(elements.dashboardList, false);
+  }
+}
+
+async function loadRawPosEvents() {
+  readConfig();
+  try {
+    setLoading(elements.rawPosList, true);
+    elements.rawPosList.innerHTML = '<p>Cargando trx POS crudas...</p>';
+    const paceContext = getSelectedPaceContext();
+    const rawParams = new URLSearchParams();
+    rawParams.set('categoryCode', state.categoryCode);
+    if (paceContext.paceDate) {
+      rawParams.set('paceDate', paceContext.paceDate);
+    }
+    if (paceContext.internalSku) {
+      rawParams.set('internalSku', paceContext.internalSku);
+    }
+    rawParams.set('limit', '10');
+    const rawPath = `/pos/raw/${encodeURIComponent(state.storeCode)}?${rawParams.toString()}`;
+    const data = await requestJson(rawPath);
+    renderRawPosEvents(Array.isArray(data) ? data : [], paceContext);
+  } catch (error) {
+    elements.rawPosList.innerHTML = `<p>${error.message}</p>`;
+  } finally {
+    setLoading(elements.rawPosList, false);
   }
 }
 
@@ -824,6 +1069,7 @@ async function submitPosMock(event) {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+    setPaceSelectionFromTimestamp(payload.timestamp, payload.internal_sku, payload.source_id);
     renderPosResult(response);
     setActiveTheme('operations');
     await refreshAll();
@@ -880,11 +1126,14 @@ function wireEvents() {
   elements.storeCode.addEventListener('change', () => { readConfig(); void loadPosBudgetContext(); });
   elements.categoryCode.addEventListener('change', () => { readConfig(); void loadPosBudgetContext(); });
   elements.analysisInternalSku.addEventListener('change', () => { readConfig(); void loadPosBudgetContext(); });
+  elements.paceDate.addEventListener('change', readConfig);
+  elements.paceHour.addEventListener('change', readConfig);
   elements.refreshAllBtn.addEventListener('click', refreshAll);
   elements.themeOverviewBtn.addEventListener('click', () => setActiveTheme('overview'));
   elements.themeConnectionBtn.addEventListener('click', () => setActiveTheme('connection'));
   elements.themeStagesBtn.addEventListener('click', () => setActiveTheme('stages'));
   elements.themeOpsBtn.addEventListener('click', () => setActiveTheme('operations'));
+  elements.themeRawPosBtn.addEventListener('click', () => setActiveTheme('rawpos'));
   elements.themePosBtn.addEventListener('click', () => setActiveTheme('pos'));
   elements.themeBudgetBtn.addEventListener('click', () => setActiveTheme('budget'));
   elements.loadPosSampleBtn.addEventListener('click', resetPosSample);
@@ -893,6 +1142,7 @@ function wireEvents() {
   elements.loadPaceBtn.addEventListener('click', loadPace);
   elements.loadPendingBtn.addEventListener('click', loadPendingRecommendations);
   elements.loadDashboardBtn.addEventListener('click', loadDashboard);
+  elements.loadRawPosBtn.addEventListener('click', loadRawPosEvents);
   elements.loadBudgetsBtn.addEventListener('click', loadBudgets);
   elements.budgetFilterDate.addEventListener('change', loadBudgets);
   elements.budgetFilterStoreCode.addEventListener('change', loadBudgets);
@@ -907,7 +1157,7 @@ function wireEvents() {
 
 async function refreshAll() {
   readConfig();
-  await Promise.all([loadHealth(), loadPace(), loadPendingRecommendations(), loadDashboard(), loadBudgets()]);
+  await Promise.all([loadHealth(), loadPace(), loadPendingRecommendations(), loadDashboard(), loadRawPosEvents(), loadBudgets()]);
   renderStages();
 }
 
@@ -921,6 +1171,7 @@ async function boot() {
   wireEvents();
   setActiveTheme('overview');
   await loadPosBudgetContext();
+  syncPaceControlsFromCurrentPos();
   syncBudgetFilterDefaults();
   await refreshAll();
 }

@@ -1,7 +1,7 @@
 Class MD.SalesBudget Extends %Persistent
 {
 
-Property BudgetDate As %Date [ Required ];
+Property BudgetDate As %Date(FORMAT = 3) [ Required ];
 Property StoreCode As %String(MAXLEN = 20) [ Required ];
 Property CategoryCode As %String(MAXLEN = 50) [ Required ];
 Property InternalSKU As %String(MAXLEN = 50);
