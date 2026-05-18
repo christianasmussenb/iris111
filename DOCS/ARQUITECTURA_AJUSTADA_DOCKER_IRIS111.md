@@ -1,9 +1,46 @@
-# Arquitectura Ajustada: Desarrollo en Docker Contenedor iris111
-## Cómo funciona GitHub Copilot + Git dentro de un contenedor IRIS
+# Arquitectura Ajustada: Workspace Local + Docker IRIS para iris111
+## Flujo actual de despliegue y desarrollo en IRIS111
 
-**Versión:** 1.1 (Ajustada para Docker contenedor iris111)  
+**Versión:** 2.0 (Alineada con el runbook actual del repositorio)  
 **Fecha:** Mayo 2026  
-**Cambio:** Código desarrollado DENTRO del contenedor, no en host
+**Cambio:** Flujo actual con workspace local, Docker IRIS reproducible y scripts de bootstrap/runbook
+
+---
+
+## Resumen operativo actual
+
+El repositorio se opera hoy desde el workspace local con estos puntos de entrada:
+
+- Imagen base: `intersystemsdc/irishealth-ml-community:latest`
+- Bootstrap del entorno: `./scripts/setup_iris.sh`
+- Arranque del contenedor principal: `docker compose --env-file .env.docker up -d`
+- Arranque del contenedor alterno: `./scripts/start_iris_alt.sh`
+- Puerto alterno por defecto: `52774`
+- Carga de clases: `./scripts/load_classes.sh`
+- Carga de maestros: `./scripts/load_mock_master_data.sh`
+- Carga del mes mock de mayo: `./scripts/load_may_2026_mock_data.sh`
+- Consola operativa: `/csp/store-console/`
+
+```mermaid
+flowchart LR
+  VSCode[VS Code + Copilot]
+  Repo[Workspace /Users/cab/VSCODE/iris111]
+  Compose[docker compose --env-file .env.docker up -d]
+  Alt[./scripts/start_iris_alt.sh\n(puerto 52774 por defecto)]
+  IRIS[IRIS Community ML\nintersystemsdc/irishealth-ml-community:latest]
+  Bootstrap[setup_iris.sh\nload_classes.sh\nload_mock_master_data.sh\nload_may_2026_mock_data.sh]
+  Console[/csp/store-console/]
+
+  VSCode --> Repo
+  Repo --> Compose
+  Repo --> Alt
+  Repo --> Bootstrap
+  Compose --> IRIS
+  Alt --> IRIS
+  IRIS --> Console
+```
+
+> Nota: las secciones siguientes conservan contexto histórico del flujo anterior con Git dentro del contenedor. El runbook vigente es el bloque de arriba y el que se refleja en el README principal.
 
 ---
 

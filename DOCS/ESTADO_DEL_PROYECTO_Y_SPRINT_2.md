@@ -12,9 +12,20 @@ Hoy el proyecto cubre el circuito principal de punta a punta:
 - vista de trx crudas,
 - gráfica horaria con presupuesto,
 - recomendaciones y feedback,
+- selector de categorías por dropdown,
+- vista de SKUs por categoría,
 - y un batch reutilizable para corregir timestamps y reinyectar eventos cuando hace falta.
 
 La prioridad actual dejó de ser “hacer funcionar la ruta básica” y pasó a ser consolidar la experiencia operativa, endurecer contratos, mantener la trazabilidad y cerrar los pendientes de validación de negocio.
+
+## Avance reciente
+
+En la última iteración se sumaron mejoras concretas sobre la consola y la base operativa:
+- la consola dejó de depender de categorías escritas a mano y ahora carga un catálogo real desde IRIS,
+- se agregó una pestaña dedicada a consultar SKUs por categoría,
+- la gráfica horaria pasó a trabajar con unidades acumuladas,
+- el eje horario de la gráfica quedó alineado con la ventana operativa,
+- y la proyección de presupuesto se ajustó para respetar el horario de ventas sin alterar los totales diarios.
 
 ## Cierre del sprint actual
 
@@ -55,6 +66,10 @@ Lo que sigue se toma como trabajo del siguiente sprint, con foco en endurecimien
 - Se añadió la vista `Grafico` con filtros de local, fecha, categoría y SKU.
 - La gráfica incluye unidades, valor y presupuesto esperado por hora.
 - Se corrigió el error HTTP del gráfico al alinear la lectura de parámetros de la consola CSP.
+- La gráfica ahora muestra unidades acumuladas y usa el tramo horario 07:00 a 22:00 en el eje visible.
+- El presupuesto horario se distribuye sobre la ventana operativa 08:00 a 21:00 manteniendo los totales diarios.
+- El catálogo de categorías se expone desde `/categories` y alimenta los dropdowns de la consola.
+- La consulta de SKUs por categoría se expone desde `/categories/:categoryCode/skus`.
 
 ### Validación realizada
 - Compilación de clases validada con `./scripts/load_classes.sh`.
@@ -62,6 +77,21 @@ Lo que sigue se toma como trabajo del siguiente sprint, con foco en endurecimien
 - Se verificó la respuesta del endpoint de presupuestos con filtros de fecha, local y categoría.
 - Se validó que la consola pública responde en `/csp/store-console/`.
 - Se comprobó que la vista de gráfica ya recibe categoría y SKU correctamente.
+- Se validó que `frontend/app.js` sigue parseando después de las últimas modificaciones.
+- Se regeneró el dataset de mayo 2026 para alinear el CSV horario con la proyección nueva de presupuesto.
+
+## Paso a paso para llevar el proyecto a otro Docker con IRIS
+
+1. Asegura que el host Docker destino tenga el repositorio montado y que el puerto objetivo no esté ocupado.
+2. Usa la imagen `intersystemsdc/irishealth-ml-community:latest` como base del contenedor IRIS.
+3. Ejecuta `./scripts/setup_iris.sh` para regenerar `.env.docker` con la configuración local del workspace.
+4. Lanza la segunda instancia con `./scripts/start_iris_alt.sh`.
+5. Si hace falta, redefine `IRIS_PORT` e `IRIS_CONTAINER_NAME` antes de arrancar.
+6. Compila las clases con `./scripts/load_classes.sh`.
+7. Carga el maestro con `./scripts/load_mock_master_data.sh`.
+8. Si quieres la maqueta completa de mayo, ejecuta `./scripts/load_may_2026_mock_data.sh`.
+9. Abre `/csp/store-console/` y valida panel, gráfica, trx crudas, presupuestos, carga de datos y catálogo de SKUs.
+10. Si necesitas una segunda validación en paralelo, usa `./scripts/start_iris_alt.sh` de nuevo con otro puerto libre.
 
 ## Aprendizajes del sprint
 
@@ -80,10 +110,16 @@ Cuando Bronze guardaba un timestamp distinto al recibido, el replay y la auditor
 ### 5. El presupuesto sirve como referencia visual, no como sustituto del dato real
 La gráfica mejoró cuando el presupuesto se usó como línea esperada por hora y no como una fuente que mezcla contexto operativo con cálculo visual.
 
-### 6. Los smoke tests deben cubrir datos reales y rutas reales
+### 6. La ventana horaria importa tanto como el total diario
+Cuando el negocio opera entre horas fijas, el eje gráfico y el presupuesto horario deben seguir la misma ventana. Si no, el dashboard se ve correcto pero la lectura operativa queda sesgada.
+
+### 7. La documentación debe reflejar la forma real de desplegar
+El camino para mover el proyecto a otro Docker con IRIS no puede quedar implícito: conviene documentar la imagen base, el puerto alterno, la carga de clases y el replay de datos en una secuencia ejecutable.
+
+### 8. Los smoke tests deben cubrir datos reales y rutas reales
 El proyecto avanzó cuando las validaciones empezaron a leer el estado persistido y los endpoints reales, no sólo a verificar mensajes visuales o helpers internos.
 
-### 7. Un batch de reparación debe ser reusable
+### 9. Un batch de reparación debe ser reusable
 La corrección del Bronze no podía quedar como un parche manual. Convertirla en servicio batch y script de ejecución dejó una herramienta mantenible para futuras correcciones masivas.
 
 ## Pendientes
@@ -100,6 +136,11 @@ Los siguientes puntos no bloquean el cierre del sprint actual; quedan como traba
 - Consolidar pruebas de contrato para endpoints críticos de la API.
 - Revisar si conviene normalizar más nombres de parámetros entre frontend y backend para reducir riesgo de regresiones.
 - Documentar mejor el flujo de reparación masiva de Bronze en el manual operativo.
+
+### Pendientes de despliegue
+- Preparar un checklist corto para mover la PoC entre hosts Docker sin depender de memoria operativa.
+- Definir si el contenedor alterno debe llevar un nombre fijo por ambiente o un sufijo configurable.
+- Confirmar si el workflow de bootstrap debe incluir carga automática de clases y maestro de datos al arrancar.
 
 ### Pendientes de documentación
 - Actualizar la arquitectura ajustada si se agregan nuevas rutas o nuevas vistas operativas.

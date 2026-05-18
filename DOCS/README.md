@@ -13,4 +13,4 @@ Este directorio agrupa la documentación de IRIS111.
 
 ## Nota
 
-El archivo [README principal](../README.md) sigue en la raíz como puerta de entrada del repositorio y resume la consola pública, el entorno local y los comandos útiles.
+El archivo [README principal](../README.md) sigue en la raíz como puerta de entrada del repositorio y resume la consola pública, el entorno local, el paso a paso para levantar el proyecto en otro Docker con IRIS y los comandos útiles.

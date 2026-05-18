@@ -42,6 +42,26 @@ If you need to override the host port or the container name, pass environment va
 IRIS_PORT=52775 IRIS_CONTAINER_NAME=iris111-lab ./scripts/start_iris_alt.sh
 ```
 
+## Run on another Docker with IRIS
+
+Use this flow when you already have another IRIS container running in the same Docker host and want to bring IRIS111 up beside it.
+
+1. Verify that Docker is running and that the target host port is free. The alternate launcher defaults to port `52774`, which avoids the standard IRIS port mapping.
+2. If needed, edit `docker-compose.yml` or pass environment variables so the container uses the image `intersystemsdc/irishealth-ml-community:latest`.
+3. Run `./scripts/setup_iris.sh` once to create or refresh `.env.docker` with the current workspace defaults.
+4. Start the secondary container with `./scripts/start_iris_alt.sh`.
+5. If you need a different name or port, override them with `IRIS_CONTAINER_NAME` and `IRIS_PORT`.
+6. Load the classes with `./scripts/load_classes.sh`.
+7. Load the master data with `./scripts/load_mock_master_data.sh`.
+8. Load the May 2026 mock month with `./scripts/load_may_2026_mock_data.sh`.
+9. Open the console at `/csp/store-console/` and verify the chart, the POS trace view, the loaded-data tab, and the SKU-by-category tab.
+
+Operational notes:
+
+- The alternate launcher keeps the workspace mount and the IRIS app layout aligned with the local repo.
+- The May mock loader is repeatable and regenerates the data before importing, so it can be used again after a reset or replay.
+- The chart now follows the active sales window and the budget projection, so the documentation and the data generator must stay aligned.
+
 Useful local commands:
 
 ```bash
