@@ -1,6 +1,6 @@
 services:
   iris111:
-    image: ${IRIS_IMAGE:-intersystemsdc/iris-community:2024.1-final}
+    image: ${IRIS_IMAGE:-intersystemsdc/irishealth-ml-community:latest}
     container_name: ${IRIS_CONTAINER_NAME:-iris111}
     ports:
       - "${IRIS_PORT:-52773}:52773"

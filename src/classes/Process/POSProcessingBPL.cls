@@ -222,7 +222,14 @@ ClassMethod CalculatePct(actual As %Numeric, budget As %Numeric) As %Numeric
 
 ClassMethod ExpectedBudgetAtHour(dailyBudget As %Numeric, saleHour As %Integer) As %Numeric
 {
-	Set hourFraction = (saleHour + 1) / 24
+	Set startHour = 8
+	Set endHour = 21
+	Set activeHours = endHour - startHour + 1
+
+	If saleHour < startHour Quit 0
+	If saleHour >= endHour Quit dailyBudget
+
+	Set hourFraction = (saleHour - startHour + 1) / activeHours
 	If hourFraction < 0 Set hourFraction = 0
 	If hourFraction > 1 Set hourFraction = 1
 	Quit dailyBudget * hourFraction

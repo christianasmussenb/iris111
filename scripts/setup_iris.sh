@@ -11,7 +11,7 @@ mkdir -p "${WORKSPACE_DIR}/frontend/src"
 
 if [[ ! -f "${WORKSPACE_DIR}/.env.docker" ]]; then
   cat > "${WORKSPACE_DIR}/.env.docker" <<EOF
-IRIS_IMAGE=intersystemsdc/iris-community:2024.1-final
+IRIS_IMAGE=intersystemsdc/irishealth-ml-community:latest
 IRIS_CONTAINER_NAME=iris111
 IRIS_PORT=52773
 IRIS_PASSWORD=Demo123456!
@@ -21,3 +21,4 @@ fi
 
 echo "IRIS workspace scaffold ready at ${WORKSPACE_DIR}."
 echo "Start the container with: docker compose --env-file .env.docker up -d"
+echo "To start a second instance on another port, use: ./scripts/start_iris_alt.sh"

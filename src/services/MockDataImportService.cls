@@ -21,6 +21,75 @@ ClassMethod ImportAll(dataDir As %String = "/iris/data") As %Status
 	Quit $$$OK
 }
 
+ClassMethod ImportMay2026MockMonth(dataDir As %String = "/iris/data") As %Status
+{
+	Set sc = ..ClearMay2026BudgetRows()
+	If $SYSTEM.Status.IsError(sc) Quit sc
+
+	Set sc = ..ImportAll(dataDir)
+	If $SYSTEM.Status.IsError(sc) Quit sc
+
+	Set sc = ..ImportPosFeed(dataDir _ "/pos_feed/sample_pos_events_2026-05.json", 1)
+	Quit sc
+}
+
+ClassMethod ClearMay2026BudgetRows() As %Status
+{
+	Set budgetStart = $ZDATEH("2026-05-01", 3)
+	Set budgetEnd = $ZDATEH("2026-05-31", 3)
+	Set stmt = ##class(%SQL.Statement).%New()
+	Set sc = stmt.%Prepare("DELETE FROM MD.SalesBudget WHERE StoreCode = ? AND BudgetDate >= ? AND BudgetDate <= ?")
+	If $SYSTEM.Status.IsError(sc) Quit sc
+	Do stmt.%Execute("GT-0145", budgetStart, budgetEnd)
+	Quit $$$OK
+}
+
+ClassMethod ImportPosFeed(filePath As %String, clearExisting As %Boolean = 1) As %Status
+{
+	Set text = ..ReadTextFile(filePath)
+	If text = "" Quit $SYSTEM.Status.Error(5001, "POS feed file is required")
+
+	Set feed = ##class(%DynamicArray).%FromJSON(text)
+	If '$IsObject(feed) Quit $SYSTEM.Status.Error(5001, "POS feed JSON is invalid")
+
+	If clearExisting {
+		Set sc = ..ClearPosData()
+		If $SYSTEM.Status.IsError(sc) Quit sc
+	}
+
+	Set importedCount = 0
+	For i = 0:1:feed.%Size() - 1 {
+		Set event = feed.%Get(i)
+		If '$IsObject(event) Continue
+		Set sc = ##class(Process.POSProcessingBPL).HandlePayload(event.%ToJSON(), "MOCK")
+		If $SYSTEM.Status.IsError(sc) Quit sc
+		Set importedCount = importedCount + 1
+	}
+
+	Quit $$$OK
+}
+
+ClassMethod ClearPosData() As %Status
+{
+	Set status = ..DeleteRows("Bronze.POSEvent")
+	If $SYSTEM.Status.IsError(status) Quit status
+	Set status = ..DeleteRows("Silver.Sale")
+	If $SYSTEM.Status.IsError(status) Quit status
+	Set status = ..DeleteRows("Gold.SalesCadence")
+	If $SYSTEM.Status.IsError(status) Quit status
+	Set status = ..DeleteRows("Ops.Recommendation")
+	Quit status
+}
+
+ClassMethod DeleteRows(tableName As %String) As %Status
+{
+	Set stmt = ##class(%SQL.Statement).%New()
+	Set sc = stmt.%Prepare("DELETE FROM " _ tableName)
+	If $SYSTEM.Status.IsError(sc) Quit sc
+	Do stmt.%Execute()
+	Quit $$$OK
+}
+
 ClassMethod ImportCategories(filePath As %String) As %Status
 {
 	Set text = ..ReadTextFile(filePath)

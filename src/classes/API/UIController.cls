@@ -11,7 +11,9 @@ XData UrlMap
 	<Route Url="/styles.css" Method="GET" Call="GetUIStyles" />
 	<Route Url="/app.js" Method="GET" Call="GetUIApp" />
     <Route Url="/health" Method="GET" Call="GetHealth" />
+	<Route Url="/categories" Method="GET" Call="GetCategories" />
 	<Route Url="/budget/context/:storeCode/:categoryCode" Method="GET" Call="GetBudgetContext" />
+	<Route Url="/categories/:categoryCode/skus" Method="GET" Call="GetCategorySkus" />
 	<Route Url="/budgets" Method="GET" Call="GetBudgets" />
 	<Route Url="/budgets" Method="POST" Call="PostBudget" />
 	<Route Url="/pos/ingest" Method="POST" Call="PostPOSIngest" />
@@ -33,6 +35,13 @@ XData UrlMap
 ClassMethod GetHealth() As %Status
 {
 	Set data = ..BuildHealthData()
+	Do ..WriteJson(data)
+	Quit $$$OK
+}
+
+ClassMethod GetCategories() As %Status
+{
+	Set data = ..BuildCategoriesData()
 	Do ..WriteJson(data)
 	Quit $$$OK
 }
@@ -86,6 +95,18 @@ ClassMethod GetBudgetContext(storeCode As %String, categoryCode As %String) As %
 {
 	Set internalSKU = ..GetRequestValue(%request, "internalSku", "internal_sku")
 	Set data = ..BuildBudgetContextData(storeCode, categoryCode, internalSKU)
+	Do ..WriteJson(data)
+	Quit $$$OK
+}
+
+ClassMethod GetCategorySkus(categoryCode As %String) As %Status
+{
+	Set search = ..GetRequestValue(%request, "search")
+	Set limit = +..GetRequestValue(%request, "limit")
+	If limit <= 0 Set limit = 50
+	If limit > 200 Set limit = 200
+	Set data = ..BuildCategorySkuData(categoryCode, search, limit)
+	Do ..AuditRequest("MD.SKU", categoryCode, "READ_SKUS", "", data.%ToJSON())
 	Do ..WriteJson(data)
 	Quit $$$OK
 }
@@ -144,6 +165,22 @@ ClassMethod BuildHealthData() As %DynamicObject
 	Set data.timestamp = $ZDATETIME($HOROLOG, 3, 1)
 	Set data.version = "iris111-api-1"
 	Quit data
+}
+
+ClassMethod BuildCategoriesData() As %DynamicArray
+{
+	Set items = ##class(%DynamicArray).%New()
+	Set stmt = ##class(%SQL.Statement).%New()
+	Set sc = stmt.%Prepare("SELECT CategoryCode, CategoryName FROM MD.Category ORDER BY CategoryName, CategoryCode")
+	If $SYSTEM.Status.IsError(sc) Quit items
+	Set rs = stmt.%Execute()
+	While rs.%Next() {
+		Set item = ##class(%DynamicObject).%New()
+		Set item.categoryCode = rs.%GetData(1)
+		Set item.categoryName = rs.%GetData(2)
+		Do items.%Push(item)
+	}
+	Quit items
 }
 
 ClassMethod NormalizeDateInput(dateValue As %String, Output normalizedDate As %Date) As %Status
@@ -442,6 +479,7 @@ ClassMethod BuildHourlySalesData(storeCode As %String, saleDate As %Date = "", c
 	Set hourUnits = 0
 	Set hourRevenue = 0
 	Set hourTransactions = 0
+	Set cumulativeUnits = 0
 	For hour = 0:1:23 {
 		Set hourUnits(hour) = 0
 		Set hourRevenue(hour) = 0
@@ -483,7 +521,9 @@ ClassMethod BuildHourlySalesData(storeCode As %String, saleDate As %Date = "", c
 		Set point = ##class(%DynamicObject).%New()
 		Set point.hour = hour
 		Set point.label = $Piece("00,01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21,22,23", ",", hour + 1)
-		Set point.units = +hourUnits(hour)
+		Set cumulativeUnits = +cumulativeUnits + +hourUnits(hour)
+		Set point.hourUnits = +hourUnits(hour)
+		Set point.units = +cumulativeUnits
 		Set point.revenue = +hourRevenue(hour)
 		Set point.transactions = +hourTransactions(hour)
 		Set point.budgetUnits = ##class(Process.POSProcessingBPL).ExpectedBudgetAtHour(data.summary.totalBudgetUnits, hour)
@@ -591,6 +631,43 @@ ClassMethod BuildBudgetContextData(storeCode As %String, categoryCode As %String
 		Set data.targetRevenue = rs.%GetData(3)
 	}
 	Quit data
+}
+
+ClassMethod BuildCategorySkuData(categoryCode As %String, search As %String = "", limit As %Integer = 50) As %DynamicArray
+{
+	Set normalizedCategory = $ZCONVERT($ZSTRIP(categoryCode, "<>", " "), "U")
+	Set normalizedSearch = $Select(search'="":$ZCONVERT($ZSTRIP(search, "<>", " "), "U"), 1:"")
+	Set items = ##class(%DynamicArray).%New()
+
+	Set stmt = ##class(%SQL.Statement).%New()
+	Set sc = stmt.%Prepare("SELECT s.InternalSKU, s.VendorSKU, s.CategoryCode, c.CategoryName, s.UnitOfMeasure FROM MD.SKU s LEFT JOIN MD.Category c ON c.CategoryCode = s.CategoryCode WHERE s.CategoryCode = ? ORDER BY s.InternalSKU")
+	If $SYSTEM.Status.IsError(sc) Quit items
+	Set rs = stmt.%Execute(normalizedCategory)
+	While rs.%Next() {
+		Set rowSku = rs.%GetData(1)
+		Set rowVendorSku = rs.%GetData(2)
+		Set rowCategoryCode = rs.%GetData(3)
+		Set rowCategoryName = rs.%GetData(4)
+		Set rowUnitOfMeasure = rs.%GetData(5)
+
+		If normalizedSearch'="" {
+			Set rowSearch = $ZCONVERT(rowSku _ " " _ rowVendorSku _ " " _ rowCategoryName, "U")
+			If rowSearch'[normalizedSearch {
+				Continue
+			}
+		}
+
+		Set item = ##class(%DynamicObject).%New()
+		Set item.internalSku = rowSku
+		Set item.vendorSku = rowVendorSku
+		Set item.categoryCode = rowCategoryCode
+		Set item.categoryName = rowCategoryName
+		Set item.unitOfMeasure = rowUnitOfMeasure
+		Do items.%Push(item)
+		If items.%Size() >= limit Quit
+	}
+
+	Quit items
 }
 
 ClassMethod PercentOf(actual As %Numeric, budget As %Numeric) As %Numeric

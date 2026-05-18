@@ -19,6 +19,9 @@ const state = {
   selectedBudgetRowId: '',
   posBudgetDate: '',
   lastFeedbackMessage: 'Aun no se envio feedback.',
+  loadedInfoDate: '',
+  categories: [],
+  skuRows: [],
 };
 
 const posDefaults = {
@@ -90,6 +93,10 @@ const elements = {
   budgetResult: document.getElementById('budgetResult'),
   budgetCount: document.getElementById('budgetCount'),
   budgetList: document.getElementById('budgetList'),
+  themeSkuBtn: document.getElementById('themeSkuBtn'),
+  panelSku: document.getElementById('panelSku'),
+  themeLoadedBtn: document.getElementById('themeLoadedBtn'),
+  panelLoaded: document.getElementById('panelLoaded'),
   dashboardContext: document.getElementById('dashboardContext'),
   chartSummary: document.getElementById('chartSummary'),
   salesChart: document.getElementById('salesChart'),
@@ -122,10 +129,24 @@ const elements = {
   loadDashboardBtn: document.getElementById('loadDashboardBtn'),
   loadRawPosBtn: document.getElementById('loadRawPosBtn'),
   loadBudgetsBtn: document.getElementById('loadBudgetsBtn'),
+  loadSkuCatalogBtn: document.getElementById('loadSkuCatalogBtn'),
   budgetFilterResetBtn: document.getElementById('budgetFilterResetBtn'),
   budgetResetBtn: document.getElementById('budgetResetBtn'),
   budgetReloadBtn: document.getElementById('budgetReloadBtn'),
   clearFeedbackBtn: document.getElementById('clearFeedbackBtn'),
+  skuCategoryCode: document.getElementById('skuCategoryCode'),
+  skuSearch: document.getElementById('skuSearch'),
+  skuLimit: document.getElementById('skuLimit'),
+  skuSummary: document.getElementById('skuSummary'),
+  skuList: document.getElementById('skuList'),
+  loadLoadedInfoBtn: document.getElementById('loadLoadedInfoBtn'),
+  loadedInfoSummary: document.getElementById('loadedInfoSummary'),
+  loadedBudgetCount: document.getElementById('loadedBudgetCount'),
+  loadedBudgetList: document.getElementById('loadedBudgetList'),
+  loadedRawPosCount: document.getElementById('loadedRawPosCount'),
+  loadedRawPosList: document.getElementById('loadedRawPosList'),
+  loadedDashboardCount: document.getElementById('loadedDashboardCount'),
+  loadedDashboardList: document.getElementById('loadedDashboardList'),
   recommendationTemplate: document.getElementById('recommendationTemplate'),
   themeOverviewBtn: document.getElementById('themeOverviewBtn'),
   themeConnectionBtn: document.getElementById('themeConnectionBtn'),
@@ -145,6 +166,15 @@ const elements = {
   panelBudget: document.getElementById('panelBudget'),
 };
 
+const categorySelectConfigs = [
+  { key: 'categoryCode', allowEmpty: false },
+  { key: 'chartCategoryCode', allowEmpty: false },
+  { key: 'posCategoryCode', allowEmpty: false },
+  { key: 'budgetCategoryCode', allowEmpty: false },
+  { key: 'budgetFilterCategoryCode', allowEmpty: true },
+  { key: 'skuCategoryCode', allowEmpty: false },
+];
+
 function readConfig() {
   state.apiBaseUrl = normalizeBaseUrl(elements.apiBaseUrl.value.trim() || getDefaultApiBaseUrl());
   state.storeCode = elements.storeCode.value.trim() || 'GT-0145';
@@ -162,7 +192,86 @@ function readConfig() {
   if (elements.budgetCategoryCode) {
     elements.budgetCategoryCode.value = state.categoryCode;
   }
+  if (elements.skuCategoryCode && !elements.skuCategoryCode.value.trim()) {
+    elements.skuCategoryCode.value = state.categoryCode;
+  }
   syncChartFiltersFromSelection();
+}
+
+function normalizeCategoryItems(data) {
+  const items = Array.isArray(data) ? data : Array.isArray(data?.categories) ? data.categories : [];
+  return items
+    .map((item) => ({
+      categoryCode: String(item?.categoryCode || '').trim(),
+      categoryName: String(item?.categoryName || '').trim(),
+    }))
+    .filter((item) => item.categoryCode);
+}
+
+function populateCategorySelects(items) {
+  const categories = normalizeCategoryItems(items);
+  state.categories = categories;
+
+  const categoryMap = new Map(categories.map((item) => [item.categoryCode, item]));
+  const fallbackValue = state.categoryCode || categories[0]?.categoryCode || 'BEBIDAS';
+
+  for (const config of categorySelectConfigs) {
+    const select = elements[config.key];
+    if (!select) {
+      continue;
+    }
+
+    const currentValue = select.value.trim();
+    const targetValue = currentValue || (!config.allowEmpty ? fallbackValue : '');
+    const options = [];
+
+    if (config.allowEmpty) {
+      options.push({ value: '', label: 'Todas', selected: targetValue === '' });
+    }
+
+    if (targetValue && !categoryMap.has(targetValue)) {
+      options.push({ value: targetValue, label: targetValue, selected: true });
+    }
+
+    for (const category of categories) {
+      const isSelected = category.categoryCode === targetValue;
+      const label = category.categoryName ? `${category.categoryCode} - ${category.categoryName}` : category.categoryCode;
+      options.push({ value: category.categoryCode, label, selected: isSelected });
+    }
+
+    if (!config.allowEmpty && options.length && !options.some((option) => option.selected)) {
+      options[0].selected = true;
+    }
+
+    select.innerHTML = options.map((option) => {
+      const selected = option.selected ? ' selected' : '';
+      return `<option value="${escapeHtml(option.value)}"${selected}>${escapeHtml(option.label)}</option>`;
+    }).join('');
+
+    if (config.allowEmpty) {
+      select.value = targetValue && categoryMap.has(targetValue) ? targetValue : '';
+    } else {
+      const finalValue = targetValue && categoryMap.has(targetValue) ? targetValue : categories[0]?.categoryCode || fallbackValue;
+      if (finalValue) {
+        select.value = finalValue;
+      }
+    }
+  }
+
+  state.categoryCode = elements.categoryCode.value.trim() || fallbackValue;
+  elements.categoryLabel.textContent = state.categoryCode;
+}
+
+async function loadCategories() {
+  try {
+    const data = await requestJson('/categories');
+    populateCategorySelects(data);
+  } catch (error) {
+    populateCategorySelects([{ categoryCode: state.categoryCode || 'BEBIDAS', categoryName: '' }]);
+    elements.feedbackResult.textContent = `No se pudieron cargar las categorias: ${error.message}`;
+  }
+
+  readConfig();
 }
 
 function normalizeBaseUrl(value) {
@@ -254,10 +363,6 @@ function syncChartFiltersFromSelection() {
   if (elements.chartCategoryCode && !elements.chartCategoryCode.value.trim()) {
     elements.chartCategoryCode.value = state.categoryCode;
   }
-
-  if (elements.chartInternalSku && !elements.chartInternalSku.value.trim()) {
-    elements.chartInternalSku.value = state.analysisInternalSku;
-  }
 }
 
 function getChartContext() {
@@ -337,6 +442,8 @@ function setActiveTheme(themeName) {
     { button: elements.themeRawPosBtn, panel: elements.panelRawPos, name: 'rawpos' },
     { button: elements.themePosBtn, panel: elements.panelPos, name: 'pos' },
     { button: elements.themeBudgetBtn, panel: elements.panelBudget, name: 'budget' },
+    { button: elements.themeSkuBtn, panel: elements.panelSku, name: 'sku' },
+    { button: elements.themeLoadedBtn, panel: elements.panelLoaded, name: 'loaded' },
   ];
 
   for (const tab of tabs) {
@@ -364,6 +471,14 @@ function setActiveTheme(themeName) {
 
   if (themeName === 'budget') {
     void loadBudgets();
+  }
+
+  if (themeName === 'sku') {
+    void loadSkuCatalog();
+  }
+
+  if (themeName === 'loaded') {
+    void loadLoadedInfo();
   }
 
   renderStages();
@@ -662,6 +777,256 @@ function renderBudgets(items) {
   }
 }
 
+function renderSkuSummary(items, categoryCode) {
+  if (!elements.skuSummary) {
+    return;
+  }
+
+  const uniqueCategories = new Set(items.map((item) => item.categoryCode).filter(Boolean));
+  elements.skuSummary.innerHTML = '';
+  elements.skuSummary.appendChild(createSummaryCard('Categoria', categoryCode || state.categoryCode, 'Maestro de SKU cargado para la categoria seleccionada.', [
+    { label: 'SKUs visibles', value: String(items.length) },
+    { label: 'Categorias', value: String(uniqueCategories.size) },
+  ]));
+  elements.skuSummary.appendChild(createSummaryCard('Busqueda', elements.skuSearch.value.trim() || 'Sin filtro', 'Si escribes texto, la lista filtra por SKU, vendor SKU o categoria.', [
+    { label: 'Limite', value: String(elements.skuLimit.value || 50) },
+    { label: 'Contexto', value: state.storeCode },
+  ]));
+}
+
+function renderSkuCatalog(items, categoryCode) {
+  state.skuRows = Array.isArray(items) ? items : [];
+  renderSkuSummary(state.skuRows, categoryCode);
+
+  const container = elements.skuList;
+  container.innerHTML = '';
+
+  if (!state.skuRows.length) {
+    container.classList.add('state-card--empty');
+    container.innerHTML = '<p>No hay SKUs para la categoria o filtro actual.</p>';
+    return;
+  }
+
+  container.classList.remove('state-card--empty');
+  for (const item of state.skuRows) {
+    const node = document.createElement('article');
+    node.className = 'sku-row';
+    node.innerHTML = `
+      <div class="sku-cell sku-cell--emphasis">${formatValue(item.internalSku)}</div>
+      <div class="sku-cell">${formatValue(item.vendorSku)}</div>
+      <div class="sku-cell">${formatValue(item.categoryCode)}${item.categoryName ? ` <span class="sku-cell__muted">· ${formatValue(item.categoryName)}</span>` : ''}</div>
+      <div class="sku-cell">${formatValue(item.unitOfMeasure)}</div>
+    `;
+    container.appendChild(node);
+  }
+}
+
+async function loadSkuCatalog() {
+  readConfig();
+  const categoryCode = elements.skuCategoryCode?.value.trim() || state.categoryCode;
+  const search = elements.skuSearch?.value.trim() || '';
+  const rawLimit = Number.parseInt(elements.skuLimit?.value || '50', 10);
+  const limit = Number.isNaN(rawLimit) ? 50 : Math.min(Math.max(rawLimit, 1), 200);
+
+  if (elements.skuLimit) {
+    elements.skuLimit.value = String(limit);
+  }
+
+  try {
+    setLoading(elements.skuList, true);
+    elements.skuList.innerHTML = '<p>Cargando SKUs...</p>';
+    const params = new URLSearchParams();
+    if (search) params.set('search', search);
+    params.set('limit', String(limit));
+    const query = params.toString();
+    const data = await requestJson(`/categories/${encodeURIComponent(categoryCode)}/skus${query ? `?${query}` : ''}`);
+    renderSkuCatalog(Array.isArray(data) ? data : [], categoryCode);
+  } catch (error) {
+    elements.skuList.innerHTML = `<p>${error.message}</p>`;
+  } finally {
+    setLoading(elements.skuList, false);
+  }
+}
+
+function renderLoadedInfoSummary() {
+  if (!elements.loadedInfoSummary) {
+    return;
+  }
+
+  const paceContext = getSelectedPaceContext();
+  const budgetRows = filterBudgetRows(state.budgetRows);
+  const rawPosRows = Array.isArray(state.rawPosRows) ? state.rawPosRows : [];
+  const dashboardRows = Array.isArray(state.dashboardRows) ? state.dashboardRows : [];
+  const loadedDateLabel = state.posBudgetDate || paceContext.paceDate || getCurrentUtcDate();
+
+  elements.loadedInfoSummary.innerHTML = '';
+  elements.loadedInfoSummary.appendChild(createSummaryCard('Contexto', `${state.storeCode} · ${state.categoryCode}`, 'Lo cargado queda filtrado con el contexto actual de la consola.', [
+    { label: 'Fecha de consulta', value: loadedDateLabel },
+    { label: 'SKU', value: paceContext.internalSku || 'categoria' },
+  ]));
+  elements.loadedInfoSummary.appendChild(createSummaryCard('Presupuesto', `${budgetRows.length} filas`, 'Filas de presupuesto visibles para el contexto elegido.', [
+    { label: 'Dia', value: loadedDateLabel },
+    { label: 'Relevantes', value: budgetRows.filter((item) => !item.internalSku || item.internalSku === paceContext.internalSku).length },
+  ]));
+  elements.loadedInfoSummary.appendChild(createSummaryCard('TRX crudas', `${rawPosRows.length} filas`, 'Traza POS reciente ya persistida en Bronze, Silver y Gold.', [
+    { label: 'Primer registro', value: rawPosRows[0]?.SourceId || '--' },
+    { label: 'Ultimo registro', value: rawPosRows[rawPosRows.length - 1]?.SourceId || '--' },
+  ]));
+  elements.loadedInfoSummary.appendChild(createSummaryCard('Panel', `${dashboardRows.length} filas`, 'Resumen del local ya calculado para la fecha seleccionada.', [
+    { label: 'Fecha del panel', value: state.dashboardDate || loadedDateLabel },
+    { label: 'Salud', value: state.healthStatus },
+  ]));
+}
+
+function createSummaryCard(title, value, note, metrics) {
+  const article = document.createElement('article');
+  article.innerHTML = `
+    <span>${title}</span>
+    <strong>${value}</strong>
+    <p class="panel-note">${note}</p>
+    <dl class="loaded-summary__metrics">
+      ${metrics.map((metric) => `
+        <div>
+          <dt>${metric.label}</dt>
+          <dd>${metric.value}</dd>
+        </div>
+      `).join('')}
+    </dl>
+  `;
+  return article;
+}
+
+function renderLoadedBudgetRows(items) {
+  const container = elements.loadedBudgetList;
+  container.innerHTML = '';
+  const uniqueDays = new Set(items.map((item) => item.budgetDate).filter(Boolean));
+  elements.loadedBudgetCount.textContent = `${items.length} fila${items.length === 1 ? '' : 's'} · ${uniqueDays.size} dia${uniqueDays.size === 1 ? '' : 's'}`;
+
+  if (!items.length) {
+    container.classList.add('state-card--empty');
+    container.innerHTML = '<p>No hay filas de presupuesto para el contexto actual.</p>';
+    return;
+  }
+
+  container.classList.remove('state-card--empty');
+  for (const item of items) {
+    const node = document.createElement('article');
+    node.className = 'budget-row';
+    node.innerHTML = `
+      <div class="budget-cell budget-cell--emphasis">${formatValue(item.budgetDate)}</div>
+      <div class="budget-cell">${formatValue(item.storeCode)}</div>
+      <div class="budget-cell">${formatValue(item.categoryCode)}</div>
+      <div class="budget-cell">${item.internalSku || 'CONSOLIDADO DE CATEGORIA'}</div>
+      <div class="budget-cell budget-cell--numeric">${formatValue(item.targetUnits)}</div>
+      <div class="budget-cell budget-cell--numeric">${formatValue(item.targetRevenue)}</div>
+      <div class="budget-cell">${formatValue(item.loadedAt)}</div>
+      <div class="budget-cell budget-cell--actions"><span class="pill">Cargado</span></div>
+    `;
+    container.appendChild(node);
+  }
+}
+
+function renderLoadedRawPosRows(items) {
+  const container = elements.loadedRawPosList;
+  container.innerHTML = '';
+  elements.loadedRawPosCount.textContent = `${items.length} fila${items.length === 1 ? '' : 's'}`;
+
+  if (!items.length) {
+    container.classList.add('state-card--empty');
+    container.innerHTML = '<p>No hay trazas POS para el contexto actual.</p>';
+    return;
+  }
+
+  container.classList.remove('state-card--empty');
+  for (const row of items) {
+    const silverSale = row.SilverSale || {};
+    const goldRows = Array.isArray(row.GoldRows) ? row.GoldRows : [];
+    const item = document.createElement('article');
+    item.className = 'raw-pos-item';
+    item.innerHTML = `
+      <div class="raw-pos-item__top">
+        <div>
+          <strong>${formatValue(row.SourceId)}</strong>
+          <p>${formatValue(row.Timestamp)} · ${formatValue(row.SourceChannel || 'MOCK')}</p>
+        </div>
+        <span class="pill">Bronze</span>
+      </div>
+      <div class="raw-pos-item__grid">
+        <div><dt>Local</dt><dd>${formatValue(row.StoreCode)}</dd></div>
+        <div><dt>Categoria</dt><dd>${formatValue(row.CategoryCode)}</dd></div>
+        <div><dt>SKU</dt><dd>${formatValue(row.InternalSKU)}</dd></div>
+        <div><dt>Cantidad</dt><dd>${formatValue(row.Qty)}</dd></div>
+      </div>
+      <div class="raw-pos-item__grid">
+        <div><dt>Precio</dt><dd>${formatValue(row.Price)}</dd></div>
+        <div><dt>Total</dt><dd>${formatValue(row.LineTotal)}</dd></div>
+        <div><dt>Recibido</dt><dd>${formatValue(row.ReceivedAt)}</dd></div>
+        <div><dt>Gold</dt><dd>${goldRows.length}</dd></div>
+      </div>
+      <p class="raw-pos-item__payload">Silver: ${formatValue(silverSale.saleId || 'sin fila')} · ${formatValue(silverSale.saleTimestamp || '')}</p>
+    `;
+    container.appendChild(item);
+  }
+}
+
+function renderLoadedDashboardRows(items) {
+  const container = elements.loadedDashboardList;
+  container.innerHTML = '';
+  elements.loadedDashboardCount.textContent = `${items.length} fila${items.length === 1 ? '' : 's'}`;
+
+  if (!items.length) {
+    container.classList.add('state-card--empty');
+    container.innerHTML = '<p>No hay panel operativo para el contexto actual.</p>';
+    return;
+  }
+
+  container.classList.remove('state-card--empty');
+  for (const row of items) {
+    const item = document.createElement('article');
+    item.className = 'dashboard-item';
+    item.innerHTML = `
+      <div class="recommendation-item__top">
+        <div>
+          <strong>${formatValue(row.CategoryCode || row.categoryCode)}</strong>
+          <p>${formatValue(row.PaceHour)}h · ${formatValue(row.PaceId)}</p>
+        </div>
+        <span class="pill">${translateUiStatus(row.Status || row.ExecutionState || 'PACE')}</span>
+      </div>
+      <div class="rec-grid">
+        <div><dt>Unidades vendidas</dt><dd>${formatValue(row.UnitsSold)}</dd></div>
+        <div><dt>Variacion</dt><dd>${formatValue(row.VarianceUnits)}</dd></div>
+        <div><dt>Presupuesto</dt><dd>${formatValue(row.UnitsBudget)}</dd></div>
+      </div>
+      <p class="rec-message">${row.BusinessMessage || 'Fila de resumen cargada'}</p>
+    `;
+    container.appendChild(item);
+  }
+}
+
+function renderLoadedInfo() {
+  if (!elements.loadedInfoSummary) {
+    return;
+  }
+
+  const paceContext = getSelectedPaceContext();
+  const budgetRows = filterBudgetRows(state.budgetRows).filter((item) => !paceContext.internalSku || !item.internalSku || item.internalSku === paceContext.internalSku);
+  const rawPosRows = Array.isArray(state.rawPosRows) ? state.rawPosRows : [];
+  const dashboardRows = Array.isArray(state.dashboardRows) ? state.dashboardRows : [];
+
+  state.loadedInfoDate = state.posBudgetDate || paceContext.paceDate || getCurrentUtcDate();
+  renderLoadedInfoSummary();
+  renderLoadedBudgetRows(budgetRows);
+  renderLoadedRawPosRows(rawPosRows.slice(0, 10));
+  renderLoadedDashboardRows(dashboardRows);
+}
+
+async function loadLoadedInfo() {
+  readConfig();
+  syncBudgetFilterDefaults();
+  await Promise.all([loadHealth(), loadPace(), loadBudgets(), loadRawPosEvents(), loadDashboard()]);
+  renderLoadedInfo();
+}
+
 function buildBudgetQueryParams() {
   const params = new URLSearchParams();
   const budgetDate = elements.budgetFilterDate.value.trim();
@@ -916,21 +1281,28 @@ function buildChartSvg(points, summary) {
         ${budgetRevenueDots.join('')}
         ${hourLabels.join('')}
         ${revenueAxisLabels}
-        <text x="${margin.left}" y="18" fill="#7be0c3" font-size="11" font-weight="700">Unidades</text>
+        <text x="${margin.left}" y="18" fill="#7be0c3" font-size="11" font-weight="700">Unidades acumuladas</text>
         <text x="${width - margin.right}" y="18" text-anchor="end" fill="#5ebcff" font-size="11" font-weight="700">Valor</text>
       </svg>
     </div>
     <div class="chart-legend">
-      <span class="chart-legend__item"><span class="chart-legend__swatch chart-legend__swatch--units"></span>Unidades vendidas</span>
+      <span class="chart-legend__item"><span class="chart-legend__swatch chart-legend__swatch--units"></span>Unidades acumuladas</span>
       <span class="chart-legend__item"><span class="chart-legend__swatch chart-legend__swatch--revenue"></span>Valor vendido</span>
       <span class="chart-legend__item"><span class="chart-legend__swatch chart-legend__swatch--budget"></span>Presupuesto</span>
     </div>
   `;
 }
 
+function getVisibleChartPoints(points) {
+  return points.filter((point) => {
+    const hour = Number(point.hour);
+    return hour >= 7 && hour <= 22;
+  });
+}
+
 function renderSalesChart(data) {
   state.chartData = data;
-  const points = Array.isArray(data?.points) ? data.points : [];
+  const points = getVisibleChartPoints(Array.isArray(data?.points) ? data.points : []);
   const summary = data?.summary || {};
   const contextLabel = [data?.saleDate || getDefaultChartDate(), data?.storeCode || state.storeCode, data?.categoryCode || 'Todas las categorias', data?.internalSku || 'Categoria'].join(' · ');
 
@@ -1387,6 +1759,8 @@ function wireEvents() {
   elements.themeRawPosBtn.addEventListener('click', () => setActiveTheme('rawpos'));
   elements.themePosBtn.addEventListener('click', () => setActiveTheme('pos'));
   elements.themeBudgetBtn.addEventListener('click', () => setActiveTheme('budget'));
+  elements.themeSkuBtn.addEventListener('click', () => setActiveTheme('sku'));
+  elements.themeLoadedBtn.addEventListener('click', () => setActiveTheme('loaded'));
   elements.loadPosSampleBtn.addEventListener('click', resetPosSample);
   elements.posForm.addEventListener('submit', submitPosMock);
   elements.budgetForm.addEventListener('submit', submitBudget);
@@ -1403,13 +1777,20 @@ function wireEvents() {
   elements.budgetFilterResetBtn.addEventListener('click', clearBudgetFilters);
   elements.budgetReloadBtn.addEventListener('click', loadBudgets);
   elements.budgetResetBtn.addEventListener('click', clearBudgetForm);
+  elements.loadSkuCatalogBtn.addEventListener('click', loadSkuCatalog);
+  elements.skuCategoryCode.addEventListener('change', loadSkuCatalog);
+  elements.skuSearch.addEventListener('change', loadSkuCatalog);
+  elements.skuLimit.addEventListener('change', loadSkuCatalog);
+  elements.loadLoadedInfoBtn.addEventListener('click', loadLoadedInfo);
   elements.feedbackForm.addEventListener('submit', submitFeedback);
   elements.clearFeedbackBtn.addEventListener('click', clearFeedback);
 }
 
 async function refreshAll() {
   readConfig();
-  await Promise.all([loadHealth(), loadPace(), loadPendingRecommendations(), loadDashboard(), loadSalesChart(), loadRawPosEvents(), loadBudgets()]);
+  await loadCategories();
+  await Promise.all([loadHealth(), loadPace(), loadPendingRecommendations(), loadDashboard(), loadSalesChart(), loadRawPosEvents(), loadBudgets(), loadSkuCatalog()]);
+  renderLoadedInfo();
   renderStages();
 }
 
@@ -1422,10 +1803,10 @@ async function boot() {
   readConfig();
   wireEvents();
   setActiveTheme('overview');
+  await refreshAll();
   await loadPosBudgetContext();
   syncPaceControlsFromCurrentPos();
   syncBudgetFilterDefaults();
-  await refreshAll();
 }
 
 void boot();

@@ -30,11 +30,24 @@ This workspace defaults to the locally available image `intersystemsdc/irishealt
 docker compose --env-file .env.docker up -d
 ```
 
+To run a second IRIS instance beside an existing one, use the alternate launcher. It defaults to host port `52774`, container name `iris111-alt`, and the same workspace mount:
+
+```bash
+./scripts/start_iris_alt.sh
+```
+
+If you need to override the host port or the container name, pass environment variables or flags:
+
+```bash
+IRIS_PORT=52775 IRIS_CONTAINER_NAME=iris111-lab ./scripts/start_iris_alt.sh
+```
+
 Useful local commands:
 
 ```bash
 ./scripts/load_classes.sh
 ./scripts/load_mock_master_data.sh
+./scripts/load_may_2026_mock_data.sh
 ./scripts/run_tests.sh all
 python3 ./scripts/mock_data_loader.py
 ```

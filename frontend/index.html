@@ -26,6 +26,8 @@
             <button id="themeRawPosBtn" class="tab-btn" type="button" role="tab" aria-controls="panelRawPos" aria-selected="false">TRX crudas</button>
             <button id="themePosBtn" class="tab-btn" type="button" role="tab" aria-controls="panelPos" aria-selected="false">POS de prueba</button>
             <button id="themeBudgetBtn" class="tab-btn" type="button" role="tab" aria-controls="panelBudget" aria-selected="false">Presupuesto</button>
+            <button id="themeSkuBtn" class="tab-btn" type="button" role="tab" aria-controls="panelSku" aria-selected="false">SKUs por categoria</button>
+            <button id="themeLoadedBtn" class="tab-btn" type="button" role="tab" aria-controls="panelLoaded" aria-selected="false">Consulta cargada</button>
           </div>
         </section>
 
@@ -91,7 +93,9 @@
             </label>
             <label class="field">
                 <span>Codigo de categoria</span>
-              <input id="categoryCode" type="text" value="BEBIDAS" />
+              <select id="categoryCode">
+                <option value="BEBIDAS" selected>BEBIDAS</option>
+              </select>
             </label>
             <label class="field">
                 <span>SKU de analisis</span>
@@ -217,7 +221,9 @@
             </label>
             <label class="field">
               <span>Categoria</span>
-              <input id="chartCategoryCode" type="text" value="BEBIDAS" />
+              <select id="chartCategoryCode">
+                <option value="BEBIDAS" selected>BEBIDAS</option>
+              </select>
             </label>
             <label class="field">
               <span>SKU</span>
@@ -252,7 +258,9 @@
             </label>
             <label class="field">
               <span>Codigo de categoria</span>
-              <input id="posCategoryCode" type="text" value="BEBIDAS" />
+              <select id="posCategoryCode">
+                <option value="BEBIDAS" selected>BEBIDAS</option>
+              </select>
             </label>
             <label class="field">
               <span>SKU interno</span>
@@ -307,7 +315,9 @@
                 </label>
                 <label class="field">
                   <span>Codigo de categoria</span>
-                  <input id="budgetCategoryCode" type="text" value="BEBIDAS" />
+                  <select id="budgetCategoryCode">
+                    <option value="BEBIDAS" selected>BEBIDAS</option>
+                  </select>
                 </label>
                 <label class="field">
                   <span>SKU interno</span>
@@ -349,7 +359,9 @@
                 </label>
                 <label class="field">
                   <span>Codigo de categoria</span>
-                  <input id="budgetFilterCategoryCode" type="text" placeholder="BEBIDAS" />
+                  <select id="budgetFilterCategoryCode">
+                    <option value="">Todas</option>
+                  </select>
                 </label>
                 <label class="field">
                   <span>SKU interno</span>
@@ -377,6 +389,107 @@
               </div>
             </article>
           </section>
+        </section>
+
+        <section id="panelSku" class="panel panel--sku theme-panel" role="tabpanel" aria-labelledby="themeSkuBtn" hidden>
+          <div class="panel__header panel__header--tabs">
+            <div>
+              <h2>SKUs por categoria</h2>
+              <p class="panel-note">Consulta el maestro de SKUs cargado en IRIS y filtra por categoria o texto libre.</p>
+            </div>
+            <button id="loadSkuCatalogBtn" class="button" type="button">Consultar SKUs</button>
+          </div>
+
+          <div class="sku-toolbar">
+            <label class="field">
+              <span>Categoria</span>
+              <select id="skuCategoryCode">
+                <option value="BEBIDAS" selected>BEBIDAS</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Busqueda</span>
+              <input id="skuSearch" type="text" placeholder="SKU, vendor SKU o categoria" />
+            </label>
+            <label class="field">
+              <span>Limite</span>
+              <input id="skuLimit" type="number" min="1" max="200" step="1" value="50" />
+            </label>
+          </div>
+
+          <div id="skuSummary" class="hero-summary sku-summary"></div>
+          <div class="sku-list__head" aria-hidden="true">
+            <div>SKU</div>
+            <div>Vendor SKU</div>
+            <div>Categoria</div>
+            <div>UOM</div>
+          </div>
+          <div id="skuList" class="sku-list state-card state-card--empty">
+            <p>Las filas de SKU apareceran aqui.</p>
+          </div>
+        </section>
+
+        <section id="panelLoaded" class="panel panel--loaded theme-panel" role="tabpanel" aria-labelledby="themeLoadedBtn" hidden>
+          <div class="panel__header panel__header--tabs">
+            <div>
+              <h2>Consulta de info cargada</h2>
+              <p class="panel-note">Resumen consolidado de lo que ya quedo cargado en IRIS para el contexto actual de local, categoria, fecha y SKU.</p>
+            </div>
+            <button id="loadLoadedInfoBtn" class="button" type="button">Consultar info cargada</button>
+          </div>
+
+          <div id="loadedInfoSummary" class="hero-summary loaded-summary"></div>
+
+          <div class="loaded-grid">
+            <article class="panel panel--inner panel--loaded-column">
+              <div class="panel__header panel__header--tabs">
+                <div>
+                  <h2>Presupuesto cargado</h2>
+                  <p class="panel-note">Filtrado con el mismo contexto que usa la consola.</p>
+                </div>
+                <span class="pill" id="loadedBudgetCount">0 filas</span>
+              </div>
+              <div class="budget-grid budget-grid__head" aria-hidden="true">
+                <div>Dia</div>
+                <div>Local</div>
+                <div>Categoria</div>
+                <div>SKU</div>
+                <div class="budget-cell--numeric">Unidades</div>
+                <div class="budget-cell--numeric">Ingresos</div>
+                <div>Cargado en</div>
+                <div>Accion</div>
+              </div>
+              <div id="loadedBudgetList" class="budget-grid__body state-card state-card--empty">
+                <p>El presupuesto cargado aparecera aqui.</p>
+              </div>
+            </article>
+
+            <article class="panel panel--inner panel--loaded-column">
+              <div class="panel__header panel__header--tabs">
+                <div>
+                  <h2>TRX crudas cargadas</h2>
+                  <p class="panel-note">Muestra la traza reciente de Bronze, Silver y Gold.</p>
+                </div>
+                <span class="pill" id="loadedRawPosCount">0 filas</span>
+              </div>
+              <div id="loadedRawPosList" class="raw-pos-list state-card state-card--empty">
+                <p>Las trx cargadas apareceran aqui.</p>
+              </div>
+            </article>
+
+            <article class="panel panel--inner panel--loaded-column">
+              <div class="panel__header panel__header--tabs">
+                <div>
+                  <h2>Panel cargado</h2>
+                  <p class="panel-note">Vista compacta del panel operativo que ya quedo calculado.</p>
+                </div>
+                <span class="pill" id="loadedDashboardCount">0 filas</span>
+              </div>
+              <div id="loadedDashboardList" class="dashboard state-card state-card--empty">
+                <p>El panel cargado aparecera aqui.</p>
+              </div>
+            </article>
+          </div>
         </section>
       </main>
     </div>
